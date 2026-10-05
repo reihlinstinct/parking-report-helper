@@ -8,12 +8,12 @@ import sys
 from collections.abc import Sequence
 
 from .municipality import (
-    build_submission,
+    build_submissions,
     format_submission,
     load_config,
     submission_dict,
 )
-from .report import Car, build_reports
+from .report import build_reports
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,7 +68,17 @@ def _read_json(path: str) -> object:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not args.municipality:
+        for flag, used in (
+            ("--reporter", args.reporter), ("--fill", args.fill is not None),
+            ("--photo", args.photo), ("--form-url", args.form_url), ("--json", args.json),
+        ):
+            if used:
+                parser.error(f"{flag} requires --municipality")
+    if (args.photo or args.form_url) and args.fill is None:
+        parser.error("--photo and --form-url require --fill")
     try:
         cars = _read_json(args.input)
         if args.municipality:
@@ -76,18 +86,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             reporter = _read_json(args.reporter) if args.reporter else {}
             if not isinstance(reporter, dict):
                 raise ValueError("reporter file must be a JSON object")
-            if not isinstance(cars, list):
-                raise ValueError("input must be a JSON list of cars")
-            subs = []
-            for index, car in enumerate(cars, start=1):
-                try:
-                    subs.append(
-                        build_submission(
-                            Car.from_mapping(car), config, reporter, not args.no_photo
-                        )
-                    )
-                except ValueError as error:
-                    raise ValueError(f"car {index}: {error}") from error
+            subs = build_submissions(cars, config, reporter, not args.no_photo)
             if args.fill is not None:
                 if not 1 <= args.fill <= len(subs):
                     raise ValueError(f"--fill must be between 1 and {len(subs)}")

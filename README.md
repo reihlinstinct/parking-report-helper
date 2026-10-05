@@ -97,12 +97,17 @@ details (URL, hotline, whether submission is manual), attachment limits and an o
 ## Code layout
 
 ```
-src/parking_report/report.py   Car dataclass and report formatting (no I/O)
-src/parking_report/cli.py      argparse CLI, installed as `parking-report`
-src/parking_report/municipality.py  config loading and form field values
-src/parking_report/configs/    per-municipality JSON configs
-tests/                         unit and CLI tests
+src/parking_report/report.py        Car dataclass and report formatting (no I/O)
+src/parking_report/municipality.py  config loading, form field values
+src/parking_report/cli.py           argparse CLI, installed as `parking-report`
+src/parking_report/fill.py          optional browser form filling (stops before submit)
+src/parking_report/inspect.py       optional read-only field check
+src/parking_report/configs/         per-municipality JSON configs
+tests/                              unit, CLI and functional tests
+docs/DESIGN.md                      architecture, invariants, test strategy
 ```
+
+See [docs/DESIGN.md](docs/DESIGN.md) for the layering rules and the safety invariants.
 
 ## Input format
 
@@ -132,9 +137,12 @@ pip install .
 python -m unittest discover -s tests -v
 ```
 
-The tests cover municipality configs and field values, plus report formatting, required fields, optional fields, date
-edges, record validation, and the real CLI: successful output, options, help,
-empty input, malformed JSON, invalid records, and missing files.
+Unit tests cover report formatting, validation, municipality configs and the URL and
+attachment guards. Functional tests (`tests/test_functional_*.py`) run the real CLI on
+`sample.json` and, when Playwright is installed (`pip install ".[fill]"` and
+`playwright install chromium`), drive headless Chromium against a local fake site: form
+filled but never submitted, HTTP 403 and captcha pages reported without retries. They
+never contact the real municipality site.
 
 ## Continuous integration
 
