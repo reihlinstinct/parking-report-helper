@@ -22,5 +22,23 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install package
+        run: python -m pip install .
       - name: Run unit and CLI tests
-        run: python -m unittest discover -v
+        run: python -m unittest discover -s tests -v
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run tests inside the image build
+        run: docker build --target test .
+      - name: Build runtime image (not pushed)
+        run: docker build --target runtime --tag parking-report-helper:ci .
+      - name: Smoke test
+        run: |
+          docker run --rm parking-report-helper:ci --help
+          docker run --rm -v "$PWD:/data:ro" parking-report-helper:ci sample.json --city "Example City" | head -n 3
+          test "$(docker run --rm --entrypoint id parking-report-helper:ci -u)" != 0

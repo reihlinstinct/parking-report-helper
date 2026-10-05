@@ -6,18 +6,42 @@ does not submit reports or attach photos.
 
 ## Requirements
 
-Python 3.10 or later. No third-party dependencies are needed.
+Python 3.10 or later, or Docker. No third-party dependencies are needed.
 
-## Usage
+## Install and run
 
 ```sh
-python3 parking_report.py sample.json
-python3 parking_report.py sample.json --city "Example City" --name "Example Reporter"
-python3 parking_report.py sample.json --no-photo
+pip install .
+parking-report sample.json
+parking-report sample.json --city "Example City" --name "Example Reporter"
+parking-report sample.json --no-photo
 ```
 
-Supply city and reporter values in Hebrew when preparing a Hebrew report.
-Attach supporting photos separately when submitting to the municipality.
+`python -m parking_report sample.json` works too. Supply city and reporter values in
+Hebrew when preparing a Hebrew report. Attach supporting photos separately when
+submitting to the municipality.
+
+## Docker
+
+The image is based on `python:3.13-slim`, runs as a non-root user, and uses
+`parking-report` as its entrypoint. The working directory is `/data`, so mount the
+folder that holds your JSON file there:
+
+```sh
+docker build -t parking-report-helper .
+docker run --rm -v "$PWD:/data:ro" parking-report-helper sample.json
+docker run --rm -v "$PWD:/data:ro" parking-report-helper sample.json --city "Example City" --no-photo
+```
+
+Run the test suite inside Docker with `docker build --target test .`.
+
+## Code layout
+
+```
+src/parking_report/report.py   Car dataclass and report formatting (no I/O)
+src/parking_report/cli.py      argparse CLI, installed as `parking-report`
+tests/                         unit and CLI tests
+```
 
 ## Input format
 
@@ -43,15 +67,17 @@ in the array.
 ## Tests
 
 ```sh
-python3 -m unittest discover -v
+pip install .
+python -m unittest discover -s tests -v
 ```
 
-The 19 tests cover report formatting, required fields, optional fields, date
+The 20 tests cover report formatting, required fields, optional fields, date
 edges, record validation, and the real CLI: successful output, options, help,
 empty input, malformed JSON, invalid records, and missing files.
 
 ## Continuous integration
 
-GitHub Actions runs the same suite on Python 3.10, 3.11, 3.12, and 3.13 for every
-push and pull request. The workflow uses read-only repository permissions and a
-five-minute job timeout. No secrets or external services are needed.
+GitHub Actions runs the suite on Python 3.10 to 3.13 for every push and pull request.
+A separate job builds the Docker image, runs the tests inside it, and smoke-tests the
+container. Nothing is published. Workflows use read-only repository permissions and
+need no secrets.

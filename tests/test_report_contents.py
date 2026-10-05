@@ -1,3 +1,4 @@
+"""Report content tests."""
 import json
 import os
 import unittest
@@ -35,7 +36,7 @@ class TestReport(unittest.TestCase):
             pr.build_report({"plate": "00-000-00"})
 
     def test_sample_file(self):
-        path = os.path.join(os.path.dirname(__file__), "sample.json")
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sample.json")
         with open(path, encoding="utf-8") as f:
             reports = pr.build_reports(json.load(f))
         self.assertEqual(len(reports), 2)
@@ -48,3 +49,4 @@ class TestReport(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
