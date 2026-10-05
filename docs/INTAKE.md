@@ -42,7 +42,7 @@ reports/
   `crosswalk`, `bus_stop`, `disabled_spot`, `corner`, `fire_hydrant`, `double_parking`, `other`.
 - `violation.question`: what to ask the reporter when the violation is unclear.
 - `user_corrections`: the reporter's corrections, kept so the next guesses improve.
-- Required for use: `plate`, `captured_at`, `address.street`. Anything else is optional.
+- Required for use: `plate`, `captured_at`, `address.street`, `address.house_number`. Anything else is optional.
 - Records that are not ready, or lack a required value, are skipped with a reason on stderr.
   They are never guessed.
 
@@ -76,3 +76,24 @@ The optional legacy --drive-folder client is unused by this workflow.
 Keep reporter identity files outside GitHub. Missing identity values remain marked
 missing. Original photos are unmodified; deleting them from the current tree does
 not erase Git history. Never change the data repository to public.
+
+## House numbers
+
+Every ready report must include a house number. If it is missing, intake skips the
+record with a clarification reason. The intake reader never fabricates a number or
+performs a geocoding request. Preparation must confirm the number with the user or
+research the nearest numbered address from a real map source before setting ready.
+For a nearest-building approximation, keep the correct street and number together,
+set address.approximate=true, and store source/source_url and distance in notes.
+Do not combine a number from one street with another street's name. A range-
+interpolated point is not a verified building frontage.
+
+## Location description
+
+New records must include location_description: a factual Hebrew description of where
+the car is relative to visible buildings, entrances, bicycle racks or other landmarks.
+Do not infer blocked passage when only bicycle parking is blocked. Keep exact visible
+placement separate from an approximate numbered address. Intake appends this description,
+photo GPS coordinates (when numeric) and an approximation warning to the violation text.
+The existing report renderer adds capture date/time and numbered street address. Legacy
+records without location_description remain readable; new preparation must populate it.
