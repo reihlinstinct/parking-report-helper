@@ -8,8 +8,9 @@
     "url": "https://www.jerusalem.muni.il/he/contactus/106/",
     "hotline": "106 (מטלפון בתוך העיר), 02-5314600 (מנייד או מחוץ לעיר)",
     "submission": "manual",
-    "automation_note": "No email address or public API is documented for reports. The web form is protected by reCAPTCHA, so this tool only prepares field values to paste into the form. It never submits anything."
+    "automation_note": "No email address or public API is documented for reports. The web form is protected by reCAPTCHA, so this tool only prepares field values, or fills them into the open form with the optional browser helper (--fill). It never submits anything and never touches the captcha. Field selectors are unverified against the live form; labels are used by default."
   },
+  "fill": {"file_input": "input[type=file]"},
   "max_attachments": 3,
   "attachment_types": ["png", "doc", "pdf", "tif", "jpg", "gif"],
   "attachment_max_mb": 5,
