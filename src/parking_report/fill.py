@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-MISSING_MARK = "<חסר>"
+from .municipality import MISSING as MISSING_MARK
+
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
