@@ -63,6 +63,16 @@ def record_to_car(record: object) -> dict[str, str]:
         "car_type": _text(record.get("car_type")),
         "notes": _text(violation.get("description")),
     }
+    location_description = _text(record.get("location_description"))
+    if location_description:
+        car["notes"] += f". תיאור המקום: {location_description}"
+    gps = record.get("gps")
+    if isinstance(gps, dict):
+        lat, lon = gps.get("lat"), gps.get("lon")
+        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+            car["notes"] += f". קואורדינטות צילום: {lat}, {lon}"
+    if address.get("approximate"):
+        car["notes"] += ". הכתובת היא קירוב לפי הבניין הממוספר הקרוב לנקודת הצילום"
     for key in ("plate", "datetime"):
         if not car[key]:
             raise ValueError(f"{key} is missing")
