@@ -35,6 +35,12 @@ docker run --rm -v "$PWD:/data:ro" parking-report-helper sample.json --city "Exa
 
 Run the test suite inside Docker with `docker build --target test .`.
 
+## Intake from Google Drive
+
+`--intake DIR` reads one folder per report (photo plus `report.json`) instead of a cars file,
+optionally copying it from Drive first with `--drive-folder`. Read-only. See
+[docs/INTAKE.md](docs/INTAKE.md).
+
 ## Municipality reports (Jerusalem)
 
 `--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem
