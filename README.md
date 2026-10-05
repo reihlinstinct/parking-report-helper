@@ -35,11 +35,45 @@ docker run --rm -v "$PWD:/data:ro" parking-report-helper sample.json --city "Exa
 
 Run the test suite inside Docker with `docker build --target test .`.
 
+## Municipality reports (Jerusalem)
+
+`--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem
+Municipality 106 web form (https://www.jerusalem.muni.il/he/contactus/106/): first
+and last name, ID type and number, phones, email, city, street, house number and the
+report text. No email address or public API is documented for reports, and the form
+uses reCAPTCHA, so the tool never submits anything. You paste the values and attach up
+to 3 photos (png, jpg, pdf, tif, gif or doc, 5 MB each) yourself.
+
+```sh
+parking-report sample.json --municipality jerusalem --reporter ~/reporter.json
+parking-report sample.json --municipality jerusalem --reporter ~/reporter.json --json
+```
+
+The reporter file holds your own details and must stay outside this repository:
+
+```json
+{"first_name": "...", "last_name": "...", "id_type": "תעודת זהות",
+ "id_number": "...", "phone": "...", "phone2": "", "email": "..."}
+```
+
+Required values that are not supplied print as `<חסר>`.
+
+### Adding another municipality
+
+Each municipality is one JSON file in `src/parking_report/configs/` with the channel
+details (URL, hotline, whether submission is manual), attachment limits and an ordered
+`fields` list. A field has a `key`, the form `label`, `required`, and a `source`:
+`reporter` (from the reporter file), `config` (a fixed value such as `city`) or
+`car`/`report` (derived from the input). Use a file outside the package with
+`--municipality path/to/city.json`.
+
 ## Code layout
 
 ```
 src/parking_report/report.py   Car dataclass and report formatting (no I/O)
 src/parking_report/cli.py      argparse CLI, installed as `parking-report`
+src/parking_report/municipality.py  config loading and form field values
+src/parking_report/configs/    per-municipality JSON configs
 tests/                         unit and CLI tests
 ```
 
@@ -71,7 +105,7 @@ pip install .
 python -m unittest discover -s tests -v
 ```
 
-The 20 tests cover report formatting, required fields, optional fields, date
+The tests cover municipality configs and field values, plus report formatting, required fields, optional fields, date
 edges, record validation, and the real CLI: successful output, options, help,
 empty input, malformed JSON, invalid records, and missing files.
 
