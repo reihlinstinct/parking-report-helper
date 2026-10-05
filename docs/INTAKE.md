@@ -1,13 +1,15 @@
-# Intake from Google Drive
+# Intake from private GitHub storage
 
-Photos of parking violations are saved by the assistant into a Drive folder, one subfolder
-per report. The tool reads those folders and prepares the report text or form values. It
-never writes to Drive and never submits anything.
+Original photos and report.json records are saved into a separate PRIVATE GitHub
+repository, parking-reports, with one folder per report under reports/. The public
+helper repository contains code and synthetic fixtures only. The private repository
+also hosts its manual workflow, so no cross-repository data credential is needed.
+The tool reads a local checkout and prepares drafts. It never submits anything.
 
 ## Layout
 
 ```
-Parking reports/
+reports/
   2026-10-05_1005_ab12/
     photo.jpg      original photo, unmodified
     report.json    the record below
@@ -47,16 +49,30 @@ Parking reports/
 ## Usage
 
 ```sh
-# a local folder (Drive for desktop sync, rclone, or a download)
-parking-report --intake ~/Drive/"Parking reports" --municipality jerusalem --reporter ~/reporter.json
-
-# copy the Drive folder first (read-only token), then read it
-export PARKING_DRIVE_TOKEN=...   # OAuth access token with the drive.readonly scope
-parking-report --intake ./reports --drive-folder <folder id> --municipality jerusalem
+# a local checkout of the private repository
+parking-report --intake ./reports --municipality jerusalem --reporter ~/reporter.json
 ```
 
-The skipped list and the photo path of each car are printed on stderr. With `--fill N` the
-car's photo is attached automatically unless `--photo` is given.
+Only ready records are used. Skipped details and photo paths go to stderr. BOTH
+stdout and stderr may contain private information: never print them in public
+workflow logs or upload them as artifacts of the public code repository.
 
-Credentials are never stored in the repository. The Drive client talks only to
-`www.googleapis.com` (or a localhost test server), sends GET requests only, does not retry.
+## Private manual workflow
+
+See [private-runner.yml](private-runner.yml) for the workflow installed in the
+private parking-reports repository as .github/workflows/prepare.yml. It uses only
+workflow_dispatch, read-only permissions and a pinned helper commit. The reports
+are mounted read-only at runtime and excluded from the Docker build context.
+The container has no network access and only prepares drafts. Output and diagnostics
+are retained as a private artifact for 7 days. No form filling or submission runs.
+
+The runner is gated by REVIEWED_HELPER=false until helper PR #8 is reviewed. After
+review, pin the approved helper revision and set the gate to true in the private
+repository. No merge or real-data run is part of this change.
+
+No Google credential, Drive token, PAT or external key is needed for this path.
+The optional legacy --drive-folder client is unused by this workflow.
+
+Keep reporter identity files outside GitHub. Missing identity values remain marked
+missing. Original photos are unmodified; deleting them from the current tree does
+not erase Git history. Never change the data repository to public.
