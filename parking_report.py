@@ -24,7 +24,10 @@ def format_datetime(value):
 
 
 def build_report(car, city="", name="", with_photo=True):
-    missing = [k for k in REQUIRED if not str(car.get(k, "")).strip()]
+    if not isinstance(car, dict):
+        raise ValueError("each car must be a JSON object")
+    missing = [k for k in REQUIRED
+               if not isinstance(car.get(k), str) or not car[k].strip()]
     if missing:
         raise ValueError("missing field(s): " + ", ".join(missing))
     street = car["street"].strip()
@@ -32,9 +35,9 @@ def build_report(car, city="", name="", with_photo=True):
     if city:
         place += ", %s" % city
     plate = car["plate"].strip()
-    car_type = str(car.get("car_type", "")).strip()
+    car_type = str(car.get("car_type") or "").strip()
     plate_text = "%s (%s)" % (plate, car_type) if car_type else plate
-    notes = str(car.get("notes", "")).strip()
+    notes = str(car.get("notes") or "").strip()
     parts = [
         "שלום, אני מדווח על רכב שחונה %s." % (notes if notes else "בחניה אסורה"),
         "מיקום: %s." % place,
@@ -51,7 +54,13 @@ def build_report(car, city="", name="", with_photo=True):
 def build_reports(cars, **kwargs):
     if not isinstance(cars, list):
         raise ValueError("input must be a JSON list of cars")
-    return [build_report(c, **kwargs) for c in cars]
+    reports = []
+    for index, car in enumerate(cars, start=1):
+        try:
+            reports.append(build_report(car, **kwargs))
+        except ValueError as error:
+            raise ValueError("car %d: %s" % (index, error)) from error
+    return reports
 
 
 def main(argv=None):
@@ -61,12 +70,12 @@ def main(argv=None):
     p.add_argument("--name", default="", help="reporter name for the sign-off")
     p.add_argument("--no-photo", action="store_true", help="omit the photo line")
     args = p.parse_args(argv)
-    with open(args.input, encoding="utf-8") as f:
-        cars = json.load(f)
     try:
+        with open(args.input, encoding="utf-8") as f:
+            cars = json.load(f)
         reports = build_reports(cars, city=args.city, name=args.name,
                                 with_photo=not args.no_photo)
-    except ValueError as e:
+    except (OSError, UnicodeError, ValueError) as e:
         print("error: %s" % e, file=sys.stderr)
         return 1
     print("\n\n".join(reports))
