@@ -27,6 +27,22 @@ jobs:
       - name: Run unit and CLI tests
         run: python -m unittest discover -s tests -v
 
+  fill:
+    name: Browser fill (mock form)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install package with the fill extra
+        run: |
+          python -m pip install ".[fill]"
+          python -m playwright install --with-deps chromium
+      - name: Run tests including the mock-form fill tests
+        run: python -m unittest discover -s tests -v
+
   docker:
     name: Docker image
     runs-on: ubuntu-latest
