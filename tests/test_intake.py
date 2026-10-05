@@ -23,11 +23,28 @@ class TestReadIntake(unittest.TestCase):
         car = found.cars[0]
         self.assertEqual(car["street"], "התנופה 17")
         self.assertEqual(car["datetime"], "2026-10-05 10:05")
-        self.assertEqual(car["notes"], "על המדרכה וחוסם אותה למעבר הולכי רגל")
+        self.assertIn("על המדרכה וחוסם אותה למעבר הולכי רגל", car["notes"])
         self.assertTrue(found.photos[0].endswith("photo.jpg"))
         reasons = dict(found.skipped)
         self.assertIn("מעבר החציה", reasons["2026-10-05_1130_cd34"])
         self.assertEqual(reasons["2026-10-05_1200_ef56"], "plate is missing")
+
+    def test_missing_house_number_requires_clarification(self):
+        record = json.loads((INTAKE / "2026-10-05_1005_ab12" / "report.json").read_text())
+        record["address"]["house_number"] = ""
+        with self.assertRaisesRegex(ValueError, "address.house_number is missing"):
+            record_to_car(record)
+        record["address"]["house_number"] = "40"
+        record["address"]["approximate"] = True
+        self.assertIn("40", record_to_car(record)["street"])
+
+    def test_location_description_and_coordinates_are_in_draft(self):
+        record = json.loads((INTAKE / "2026-10-05_1005_ab12" / "report.json").read_text())
+        record["location_description"] = "ליד כניסת הבניין על ריצוף האבן"
+        car = record_to_car(record)
+        self.assertIn(record["location_description"], car["notes"])
+        self.assertIn(str(record["gps"]["lat"]), car["notes"])
+        self.assertIn("קירוב", car["notes"])
 
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
