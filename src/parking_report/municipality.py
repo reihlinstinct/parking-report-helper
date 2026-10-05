@@ -77,6 +77,24 @@ def build_submission(
     return rows
 
 
+def build_submissions(
+    cars: object,
+    config: Mapping[str, Any],
+    reporter: Mapping[str, Any] | None = None,
+    with_photo: bool = True,
+) -> list[list[tuple[str, str, str]]]:
+    """Build the form rows for every car; errors name the failing 1-based position."""
+    if not isinstance(cars, list):
+        raise ValueError("input must be a JSON list of cars")
+    submissions = []
+    for index, car in enumerate(cars, start=1):
+        try:
+            submissions.append(build_submission(Car.from_mapping(car), config, reporter, with_photo))
+        except ValueError as error:
+            raise ValueError(f"car {index}: {error}") from error
+    return submissions
+
+
 def format_submission(rows: list[tuple[str, str, str]]) -> str:
     return "\n".join(f"{label}: {value}" for _, label, value in rows)
 
