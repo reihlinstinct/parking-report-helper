@@ -37,6 +37,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON file with reporter details for the form (keep it outside the repo)",
     )
     parser.add_argument(
+        "--fill",
+        metavar="N",
+        type=int,
+        help="with --municipality, open the form in a browser and fill it for car number N "
+        "(1-based). Needs the optional 'fill' extra. Never submits: you review, pass any "
+        "verification and press submit yourself",
+    )
+    parser.add_argument(
+        "--photo",
+        metavar="FILE",
+        action="append",
+        default=[],
+        help="with --fill, photo to attach (repeatable, limits come from the config)",
+    )
+    parser.add_argument(
+        "--form-url",
+        metavar="URL",
+        help="with --fill, use a local test page (file:// or localhost) instead of the real form",
+    )
+    parser.add_argument(
         "--json", action="store_true", help="with --municipality, print JSON instead of text"
     )
     return parser
@@ -68,6 +88,24 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                 except ValueError as error:
                     raise ValueError(f"car {index}: {error}") from error
+            if args.fill is not None:
+                if not 1 <= args.fill <= len(subs):
+                    raise ValueError(f"--fill must be between 1 and {len(subs)}")
+                from .fill import FillError, fill_form
+
+                try:
+                    result = fill_form(
+                        config, subs[args.fill - 1], args.photo, url=args.form_url
+                    )
+                except FillError as error:
+                    raise ValueError(str(error)) from error
+                print(
+                    "Form closed. Filled: " + ", ".join(result["filled"])
+                    + ("; not found: " + ", ".join(result["not_found"]) if result["not_found"] else "")
+                    + ("; left blank: " + ", ".join(result["skipped"]) if result["skipped"] else ""),
+                    file=sys.stderr,
+                )
+                return 0
             if args.json:
                 output = json.dumps(
                     [submission_dict(rows) for rows in subs], ensure_ascii=False, indent=2
