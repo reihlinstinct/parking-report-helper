@@ -1,0 +1,46 @@
+name: Jerusalem 106 read-only probe
+
+# Manual only. Never contact the municipality on push, pull_request or a schedule.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jerusalem-live-form-probe
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install optional browser helper
+        run: |
+          python -m pip install ".[fill]"
+          python -m playwright install --with-deps chromium
+      - name: Load official form once without filling or submitting
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from parking_report.inspect import inspect_form
+          from parking_report.municipality import load_config
+
+          try:
+              result = inspect_form(load_config("jerusalem"))
+          except Exception as exc:
+              result = {"result": "load_error", "error": str(exc)}
+          output = json.dumps(result, ensure_ascii=False, indent=2)
+          print(output)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("## One read-only page load\n\n```json\n" + output + "\n```\n")
+              summary.write("\nNo values entered, files uploaded, captcha interaction, or submission. "
+                            "A green job means the diagnostic completed, not that the site allowed access. "
+                            "Only main-frame fields are inspected. No automatic retry.\n")
+          PY
