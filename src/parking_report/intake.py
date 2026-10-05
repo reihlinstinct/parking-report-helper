@@ -54,6 +54,8 @@ def record_to_car(record: object) -> dict[str, str]:
     if not street:
         raise ValueError("address.street is missing")
     number = _text(address.get("house_number"))
+    if not number:
+        raise ValueError("address.house_number is missing; confirm a number or research the nearest numbered address and mark it approximate")
     car = {
         "plate": _text(record.get("plate")),
         "street": f"{street} {number}".strip(),
