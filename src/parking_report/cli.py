@@ -21,7 +21,20 @@ def build_parser() -> argparse.ArgumentParser:
         prog="parking-report",
         description="Turn a JSON list of cars into Hebrew parking-violation report texts.",
     )
-    parser.add_argument("input", help="JSON file with a list of cars")
+    parser.add_argument("input", nargs="?", help="JSON file with a list of cars")
+    parser.add_argument(
+        "--intake",
+        metavar="DIR",
+        help="read report folders (report.json + photo each) from DIR instead of a cars file; "
+        "see docs/INTAKE.md. Read-only: only records with status 'ready' are used",
+    )
+    parser.add_argument(
+        "--drive-folder",
+        metavar="ID",
+        help="with --intake, first copy that Google Drive folder into DIR (read-only; needs "
+        "a read-only access token in PARKING_DRIVE_TOKEN)",
+    )
+    parser.add_argument("--drive-api", help=argparse.SUPPRESS)  # local test server only
     parser.add_argument("--city", default="", help="city appended to the street")
     parser.add_argument("--name", default="", help="reporter name for the sign-off")
     parser.add_argument("--no-photo", action="store_true", help="omit the photo line")
@@ -70,6 +83,12 @@ def _read_json(path: str) -> object:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if bool(args.input) == bool(args.intake):
+        parser.error("give exactly one of: a cars JSON file, or --intake DIR")
+    if (args.drive_folder or args.drive_api) and not args.intake:
+        parser.error("--drive-folder requires --intake")
+    if args.drive_api and not args.drive_folder:
+        parser.error("--drive-api requires --drive-folder")
     if not args.municipality:
         for flag, used in (
             ("--reporter", args.reporter), ("--fill", args.fill is not None),
@@ -80,7 +99,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if (args.photo or args.form_url) and args.fill is None:
         parser.error("--photo and --form-url require --fill")
     try:
-        cars = _read_json(args.input)
+        photos: list[str] = []
+        if args.intake:
+            if args.drive_folder:
+                from .drive import API, download_folder
+
+                download_folder(args.drive_folder, args.intake, args.drive_api or API)
+            from .intake import read_intake
+
+            found = read_intake(args.intake)
+            cars, photos = found.cars, found.photos
+            for name, reason in found.skipped:
+                print(f"skipped {name}: {reason}", file=sys.stderr)
+            for index, photo in enumerate(photos, start=1):
+                print(f"car {index} photo: {photo or '(none)'}", file=sys.stderr)
+        else:
+            cars = _read_json(args.input)
         if args.municipality:
             config = load_config(args.municipality)
             reporter = _read_json(args.reporter) if args.reporter else {}
@@ -94,7 +128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
                 try:
                     result = fill_form(
-                        config, subs[args.fill - 1], args.photo, url=args.form_url
+                        config, subs[args.fill - 1],
+                        args.photo or ([photos[args.fill - 1]] if photos and photos[args.fill - 1] else []),
+                        url=args.form_url
                     )
                 except FillError as error:
                     raise ValueError(str(error)) from error

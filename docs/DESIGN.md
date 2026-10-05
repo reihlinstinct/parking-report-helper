@@ -16,6 +16,7 @@ These are tested and must hold for every change:
 4. One request per diagnostic run, no retries on HTTP errors or verification walls.
 5. No personal data in the repository. Reporter details live in a file outside it.
 6. The core (report text, form values) stays dependency-free. Playwright is an extra.
+7. Intake is read-only: GET requests to the Drive API host only, no uploads or edits, no retries, no tokens in the repository. Records that are not `ready` are skipped, never guessed.
 
 ## Layers
 
@@ -27,6 +28,8 @@ report.py         Car model, validation, Hebrew report text              (pure)
 
 fill.py           browser form filling   (optional, Playwright)  -> uses municipality.MISSING
 inspect.py        read-only field presence check (optional)       -> uses fill.check_url
+intake.py         read report folders (report.json + photo) -> cars   (read-only file I/O)
+drive.py          optional read-only Drive download into a local folder (stdlib urllib)
 configs/*.json    one data file per municipality
 ```
 
@@ -47,6 +50,9 @@ input.json --> Car.from_mapping (validate) --> build_report            --> text
 A submission is an ordered list of `(key, label, value)` rows, one per config field.
 Required values that are not available become `MISSING` (`<חסר>`) so gaps are visible
 instead of invented. Browser code skips those fields.
+
+Intake (`--intake`, see `INTAKE.md`) replaces the JSON file as the source of cars:
+`Drive folder --(drive.py)--> local folder --(intake.py)--> cars + photos --> same pipeline`.
 
 ## Error handling
 

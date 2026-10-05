@@ -35,6 +35,13 @@ docker run --rm -v "$PWD:/data:ro" parking-report-helper sample.json --city "Exa
 
 Run the test suite inside Docker with `docker build --target test .`.
 
+## Intake from private GitHub storage
+
+Store original photos and report.json records in the PRIVATE parking-reports repository.
+Its manual workflow checks out its own reports, builds the public helper at a reviewed
+commit, and mounts the records read-only. No external credentials are needed. The public
+repo never receives private logs or artifacts. See [docs/INTAKE.md](docs/INTAKE.md).
+
 ## Municipality reports (Jerusalem)
 
 `--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem

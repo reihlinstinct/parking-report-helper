@@ -1,0 +1,50 @@
+name: Prepare private parking drafts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Pending review of helper PR #8. No real data may be processed yet.
+  REVIEWED_HELPER: 'false'
+  HELPER_SHA: '5e3709e1d59ad366f115220ac817e978b74795c7'
+
+jobs:
+  prepare:
+    if: ${{ github.event.repository.private == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Require reviewed helper
+        run: test "$REVIEWED_HELPER" = true
+      - name: Check out private reports
+        uses: actions/checkout@v7
+        with:
+          path: private-data
+          persist-credentials: false
+      - name: Check out public helper at fixed revision
+        uses: actions/checkout@v7
+        with:
+          repository: reihlinstinct/parking-report-helper
+          ref: ${{ env.HELPER_SHA }}
+          path: helper
+          persist-credentials: false
+      - name: Build code-only Docker image
+        run: docker build --target runtime -t parking-report-helper:manual helper
+      - name: Prepare drafts without printing private content
+        run: |
+          mkdir -p output private-data/reports
+          docker run --rm --network none \
+            -v "$PWD/private-data/reports:/data/reports:ro" \
+            parking-report-helper:manual --intake /data/reports \
+            --municipality jerusalem > output/drafts.txt 2> output/diagnostics.txt
+      - name: Save private output for seven days
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: parking-drafts
+          path: output/
+          retention-days: 7
+          if-no-files-found: ignore

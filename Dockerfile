@@ -14,6 +14,7 @@ COPY --from=build /wheels /wheels
 RUN pip install --no-cache-dir /wheels/*.whl
 COPY sample.json ./sample.json
 COPY tests ./tests
+COPY docs ./docs
 RUN python -m unittest discover -s tests -v
 
 FROM python:3.13-slim AS runtime
