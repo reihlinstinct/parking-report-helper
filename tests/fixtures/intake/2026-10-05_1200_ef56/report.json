@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "status": "ready",
+  "captured_at": "2026-10-05 12:00",
+  "address": {"street": "הדוגמה", "house_number": "2"},
+  "plate": "",
+  "violation": {"description": "בתחנת אוטובוס", "category": "bus_stop", "confidence": "high", "needs_clarification": false, "question": ""}
+}
