@@ -2,7 +2,7 @@
 
 A dependency-free Python CLI that turns a JSON list of vehicles into Hebrew
 parking-violation report drafts for use in Israel. It generates text only; it
-does not submit reports or attach photos.
+does not submit reports. An optional browser helper can fill a municipal web form and stops before submitting.
 
 ## Requirements
 
@@ -57,6 +57,33 @@ The reporter file holds your own details and must stay outside this repository:
 ```
 
 Required values that are not supplied print as `<חסר>`.
+
+### Filling the form in a browser (optional)
+
+An optional helper opens the form in a real browser window, fills every field from the
+config and your reporter file, attaches photos, and then stops. You review, pass any
+verification (captcha) and press submit yourself.
+
+```sh
+pip install ".[fill]"
+playwright install chromium
+parking-report sample.json --municipality jerusalem --reporter ~/reporter.json \
+  --fill 1 --photo ~/photo1.jpg --photo ~/photo2.jpg
+```
+
+`--fill N` picks car number N from the input (one submission per report). Close the
+browser window when you are done. The helper never clicks submit, never solves or
+works around captchas or bot protection, and rejects any URL that is not the configured
+form or a local test page. Photos are checked against the config limits first. The core
+tool stays dependency-free; Playwright is only needed for this extra.
+
+Fields are located by their visible Hebrew label, or by an optional `"selector"` in the
+field's config entry. Known limit: the live Jerusalem page returned HTTP 403 to automated
+read-only requests while this was written, so the labels and selectors are untested
+against the real form. Tests use a local mock form (`tests/fixtures/`). If a field is
+not found it is reported on exit and left for you to fill by hand; adjust the label or
+add a `selector` in `configs/jerusalem.json`. If the site blocks the automated browser,
+use the plain copy-paste output above.
 
 ### Adding another municipality
 
