@@ -117,13 +117,14 @@ def fill_form(
     """
     try:
         from playwright.sync_api import sync_playwright
+        from playwright_stealth import Stealth
     except ImportError:
         raise FillError(
-            'playwright is not installed. Run: pip install ".[fill]" && playwright install chromium'
+            'playwright or playwright-stealth is not installed. Run: pip install ".[fill]" playwright-stealth && playwright install chromium'
         ) from None
     target = check_url(url or config.get("channel", {}).get("url", ""), config)
     files = check_attachments(attachments, config)
-    with sync_playwright() as pw:
+    with Stealth().use_sync(sync_playwright()) as pw:
         browser = pw.chromium.launch(headless=headless)
         try:
             page = browser.new_page()
