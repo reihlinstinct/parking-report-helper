@@ -15,3 +15,6 @@ parking-report = "parking_report.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+parking_report = ["configs/*.json"]
