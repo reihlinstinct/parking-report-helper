@@ -20,13 +20,13 @@ date, not claimed as proof of the vehicle's state at the photograph time.
 python -m parking_report.registry /private/report.json --output /private/registry.json
 ```
 
-Run in the PRIVATE caller repository only. Never publish the JSON, copy it into
-public posts, or append it automatically to municipal complaints. These data can
-be stale/incomplete; unknown and failed matches need review. A disability tag alone
-does not decide whether the photographed parking is legal. An expired licence is
-not itself proof of the reported parking violation. The user's desired enforcement
-purpose needs municipal category/requirements confirmation.
-
-The private workflow should save registry.json in its private ledger branch,
-never use it to mutate the original evidence, and exclude ledger commits from push
-triggers. Mock unit tests require no network. This module does not file reports.
+Run in the PRIVATE caller repository only. Never publish the JSON or copy it into
+public posts beyond what the owner has approved. Municipal reports: when a report
+record has a `registry` key (the lookup result), `intake.record_to_car` turns it into
+Hebrew sentences with `describe_he` (make/model/colour, licence validity, last test
+date, disability tag and its raw type code). The owner approved this on 2026-10-08;
+owner/chassis data are still never requested. A missing record is worded as "not
+found in the active-vehicle dataset", and failed lookups as "not completed", never
+as a finding. The final text is still shown to the owner before filing and then
+frozen as `approved_description`. Coordinates are never added to report text.
+Data can be stale or incomplete; check unknown results before approving.

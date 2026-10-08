@@ -31,6 +31,7 @@ class Car:
     notes: str = ""
     draft_kind: str = "parking"
     event_type: str = ""
+    registry_text: str = ""
 
     @classmethod
     def from_mapping(cls, data: object) -> Car:
@@ -55,6 +56,7 @@ class Car:
             notes=str(data.get("notes") or "").strip(),
             draft_kind=kind,
             event_type=str(data.get("event_type") or "").strip(),
+            registry_text=str(data.get("registry_text") or "").strip(),
         )
 
 
@@ -84,6 +86,8 @@ def build_report(
         f"תאריך ושעה: {format_datetime(record.datetime)}.",
         f"מספר רכב: {plate_text}.",
     ]
+    if record.registry_text:
+        parts.append(record.registry_text)
     if with_photo:
         parts.append("מצורפת תמונה.")
     parts.append("אבקש לשלוח פקח אכיפת חניה ולעדכן אותי במספר הפנייה.")

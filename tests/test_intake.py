@@ -38,13 +38,23 @@ class TestReadIntake(unittest.TestCase):
         record["address"]["approximate"] = True
         self.assertIn("40", record_to_car(record)["street"])
 
-    def test_location_description_and_coordinates_are_in_draft(self):
+    def test_location_description_is_in_draft_without_coordinates(self):
         record = json.loads((INTAKE / "2026-10-05_1005_ab12" / "report.json").read_text())
         record["location_description"] = "ליד כניסת הבניין על ריצוף האבן"
         car = record_to_car(record)
         self.assertIn(record["location_description"], car["notes"])
-        self.assertIn(str(record["gps"]["lat"]), car["notes"])
+        self.assertNotIn(str(record["gps"]["lat"]), car["notes"])
+        self.assertNotIn(str(record["gps"]["lon"]), car["notes"])
         self.assertIn("קירוב", car["notes"])
+
+    def test_registry_text_is_added_to_parking_reports(self):
+        record = json.loads((INTAKE / "2026-10-05_1005_ab12" / "report.json").read_text())
+        self.assertNotIn("registry_text", record_to_car(record))
+        record["registry"] = {"plate": "1234567", "checked_on": "2026-10-08",
+                              "vehicle_lookup": "not_found_in_dataset",
+                              "disability_lookup": "not_found_in_dataset"}
+        car = record_to_car(record)
+        self.assertIn("לא נמצא לו רישיון בתוקף", car["registry_text"])
 
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
