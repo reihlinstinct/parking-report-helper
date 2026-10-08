@@ -56,6 +56,10 @@ def record_to_car(record: object) -> dict[str, str]:
     number = _text(address.get("house_number"))
     if not number:
         raise ValueError("address.house_number is missing; confirm a number or research the nearest numbered address and mark it approximate")
+    from .subjects import select_subject, is_parking_subject
+    parking = is_parking_subject(select_subject(record))
+    if not parking and not _text(violation.get("description")):
+        raise ValueError("A municipal issue needs an observed description")
     car = {
         "plate": _text(record.get("plate")),
         "street": f"{street} {number}".strip(),
@@ -63,6 +67,9 @@ def record_to_car(record: object) -> dict[str, str]:
         "car_type": _text(record.get("car_type")),
         "notes": _text(violation.get("description")),
     }
+    if not parking:
+        car["draft_kind"] = "municipal_issue"
+        car["event_type"] = _text(violation.get("category"))
     location_description = _text(record.get("location_description"))
     if location_description:
         car["notes"] += f". תיאור המקום: {location_description}"
@@ -73,7 +80,7 @@ def record_to_car(record: object) -> dict[str, str]:
             car["notes"] += f". קואורדינטות צילום: {lat}, {lon}"
     if address.get("approximate"):
         car["notes"] += ". הכתובת היא קירוב לפי הבניין הממוספר הקרוב לנקודת הצילום"
-    for key in ("plate", "datetime"):
+    for key in (("plate", "datetime") if parking else ("datetime",)):
         if not car[key]:
             raise ValueError(f"{key} is missing")
     return car
