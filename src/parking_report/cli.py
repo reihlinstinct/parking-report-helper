@@ -50,26 +50,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="JSON file with reporter details for the form (keep it outside the repo)",
     )
     parser.add_argument(
-        "--fill",
-        metavar="N",
-        type=int,
-        help="with --municipality, open the form in a browser and fill it for car number N "
-        "(1-based). Needs the optional 'fill' extra. Never submits: you review, pass any "
-        "verification and press submit yourself",
-    )
-    parser.add_argument(
-        "--photo",
-        metavar="FILE",
-        action="append",
-        default=[],
-        help="with --fill, photo to attach (repeatable, limits come from the config)",
-    )
-    parser.add_argument(
-        "--form-url",
-        metavar="URL",
-        help="with --fill, use a local test page (file:// or localhost) instead of the real form",
-    )
-    parser.add_argument(
         "--json", action="store_true", help="with --municipality, print JSON instead of text"
     )
     return parser
@@ -91,13 +71,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--drive-api requires --drive-folder")
     if not args.municipality:
         for flag, used in (
-            ("--reporter", args.reporter), ("--fill", args.fill is not None),
-            ("--photo", args.photo), ("--form-url", args.form_url), ("--json", args.json),
+            ("--reporter", args.reporter), ("--json", args.json),
         ):
             if used:
                 parser.error(f"{flag} requires --municipality")
-    if (args.photo or args.form_url) and args.fill is None:
-        parser.error("--photo and --form-url require --fill")
     try:
         photos: list[str] = []
         if args.intake:
@@ -121,26 +98,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             if not isinstance(reporter, dict):
                 raise ValueError("reporter file must be a JSON object")
             subs = build_submissions(cars, config, reporter, not args.no_photo)
-            if args.fill is not None:
-                if not 1 <= args.fill <= len(subs):
-                    raise ValueError(f"--fill must be between 1 and {len(subs)}")
-                from .fill import FillError, fill_form
-
-                try:
-                    result = fill_form(
-                        config, subs[args.fill - 1],
-                        args.photo or ([photos[args.fill - 1]] if photos and photos[args.fill - 1] else []),
-                        url=args.form_url
-                    )
-                except FillError as error:
-                    raise ValueError(str(error)) from error
-                print(
-                    "Form closed. Filled: " + ", ".join(result["filled"])
-                    + ("; not found: " + ", ".join(result["not_found"]) if result["not_found"] else "")
-                    + ("; left blank: " + ", ".join(result["skipped"]) if result["skipped"] else ""),
-                    file=sys.stderr,
-                )
-                return 0
             if args.json:
                 output = json.dumps(
                     [submission_dict(rows) for rows in subs], ensure_ascii=False, indent=2

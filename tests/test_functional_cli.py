@@ -96,21 +96,17 @@ class TestMunicipalityOutput(unittest.TestCase):
 
 class TestOptionValidation(unittest.TestCase):
     def test_options_that_need_a_municipality_are_rejected_not_ignored(self):
-        for flag in (["--reporter", "x.json"], ["--fill", "1"], ["--json"]):
+        for flag in (["--reporter", "x.json"], ["--json"]):
             with self.subTest(flag=flag):
                 result = run_cli(str(SAMPLE), *flag)
                 self.assertEqual(result.returncode, 2)
                 self.assertIn("requires --municipality", result.stderr)
 
-    def test_photo_without_fill_is_rejected(self):
-        result = run_cli(str(SAMPLE), "--municipality", "jerusalem", "--photo", "a.jpg")
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("require --fill", result.stderr)
-
-    def test_fill_number_out_of_range_is_a_clean_error(self):
-        result = run_cli(str(SAMPLE), "--municipality", "jerusalem", "--fill", "9")
-        self.assertEqual(result.returncode, 1)
-        self.assertIn("--fill must be between 1 and 2", result.stderr)
+    def test_removed_browser_flags_are_rejected(self):
+        for flag in (["--fill", "1"], ["--photo", "a.jpg"], ["--form-url", "https://example.invalid"]):
+            result = run_cli(str(SAMPLE), "--municipality", "jerusalem", *flag)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("unrecognized arguments", result.stderr)
 
 
 if __name__ == "__main__":

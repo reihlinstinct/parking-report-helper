@@ -2,7 +2,7 @@
 
 A dependency-free Python CLI that turns a JSON list of vehicles into Hebrew
 parking-violation report drafts for use in Israel. It generates text only; it
-does not submit reports by default. An optional browser helper stops before submitting.
+does not submit reports by default. Browser automation has been removed; direct API preparation is the reporting route.
 The optional 106 API runner supports explicitly approved local submissions; its
 reusable private-repo workflow is preview-only until separately enabled. See
 [docs/API106.md](docs/API106.md).
@@ -50,8 +50,9 @@ repo never receives private logs or artifacts. See [docs/INTAKE.md](docs/INTAKE.
 `--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem
 Municipality 106 web form (https://www.jerusalem.muni.il/he/contactus/106/): first
 and last name, ID type and number, phones, email, city, street, house number and the
-report text. The web form uses reCAPTCHA, so this browser mode never submits anything.
-A separately supplied API is supported by the optional API runner. You paste the values and attach up
+report text. This command only formats text/field values for manual use.
+The separately supplied API is supported by `parking-report-106`; no browser
+automation remains. You paste the values and attach up
 to 3 photos (png, jpg, pdf, tif, gif or doc, 5 MB each) yourself.
 
 ```sh
@@ -68,33 +69,6 @@ The reporter file holds your own details and must stay outside this repository:
 
 Required values that are not supplied print as `<חסר>`.
 
-### Filling the form in a browser (optional)
-
-An optional helper opens the form in a real browser window, fills every field from the
-config and your reporter file, attaches photos, and then stops. You review, pass any
-verification (captcha) and press submit yourself.
-
-```sh
-pip install ".[fill]"
-playwright install chromium
-parking-report sample.json --municipality jerusalem --reporter ~/reporter.json \
-  --fill 1 --photo ~/photo1.jpg --photo ~/photo2.jpg
-```
-
-`--fill N` picks car number N from the input (one submission per report). Close the
-browser window when you are done. The helper never clicks submit, never solves or
-works around captchas or bot protection, and rejects any URL that is not the configured
-form or a local test page. Photos are checked against the config limits first. The core
-tool stays dependency-free; Playwright is only needed for this extra.
-
-Fields are located by their visible Hebrew label, or by an optional `"selector"` in the
-field's config entry. Known limit: the live Jerusalem page returned HTTP 403 to automated
-read-only requests while this was written, so the labels and selectors are untested
-against the real form. Tests use a local mock form (`tests/fixtures/`). If a field is
-not found it is reported on exit and left for you to fill by hand; adjust the label or
-add a `selector` in `configs/jerusalem.json`. If the site blocks the automated browser,
-use the plain copy-paste output above.
-
 ### Adding another municipality
 
 Each municipality is one JSON file in `src/parking_report/configs/` with the channel
@@ -110,8 +84,9 @@ details (URL, hotline, whether submission is manual), attachment limits and an o
 src/parking_report/report.py        Car dataclass and report formatting (no I/O)
 src/parking_report/municipality.py  config loading, form field values
 src/parking_report/cli.py           argparse CLI, installed as `parking-report`
-src/parking_report/fill.py          optional browser form filling (stops before submit)
-src/parking_report/inspect.py       optional read-only field check
+src/parking_report/api106.py        optional direct API transport and state guards
+src/parking_report/api_cli.py       offline-first 106 runner
+src/parking_report/registry.py      private government registry enrichment
 src/parking_report/configs/         per-municipality JSON configs
 tests/                              unit, CLI and functional tests
 docs/DESIGN.md                      architecture, invariants, test strategy
@@ -147,12 +122,16 @@ pip install .
 python -m unittest discover -s tests -v
 ```
 
-Unit tests cover report formatting, validation, municipality configs and the URL and
-attachment guards. Functional tests (`tests/test_functional_*.py`) run the real CLI on
-`sample.json` and, when Playwright is installed (`pip install ".[fill]"` and
-`playwright install chromium`), drive headless Chromium against a local fake site: form
-filled but never submitted, HTTP 403 and captcha pages reported without retries. They
-never contact the real municipality site.
+Unit tests cover formatting, intake, config validation, API duplicate/uncertain-result
+guards and private registry lookups. Functional tests run the real CLI with
+synthetic data and generated photos. No test contacts the municipality. Browser
+fill tests, mock-form fixtures, Playwright/stealth dependencies and the read-only
+website-probe workflow are removed because 106 reporting now uses the API.
+
+Registry enrichment runs in the private caller repository only. See
+[docs/REGISTRY.md](docs/REGISTRY.md) for fields and unknown-result handling.
+Reporter fields and API credentials stay in private secrets/env, never public code.
+Actual live Actions submission remains disabled.
 
 ## Continuous integration
 
