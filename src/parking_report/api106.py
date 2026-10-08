@@ -262,13 +262,18 @@ def save_state(path: Any, state: Any) -> Any:
     finally:
         Path(temporary).unlink(missing_ok=True)
 
-def submit(api: Any, reporter: Any, report: Any, jpeg: Any, fingerprint: Any, state_dir: Any, retry_photo: Any=False) -> Any:
+def submit(api: Any, reporter: Any, report: Any, jpeg: Any, fingerprint: Any, state_dir: Any, retry_photo: Any=False, checkpoint: Any=None, initial_state: Any=None) -> Any:
     state_dir.mkdir(parents=True, exist_ok=True, mode=448)
     os.chmod(state_dir, 448)
     path = state_dir / (fingerprint + '.json')
     try:
         with FileLock(str(path) + '.lock', timeout=0, mode=384):
-            state = json_file(path) if path.exists() else {'version': 1, 'status': 'prepared', 'file_name': str(uuid.uuid4()) + '.jpg'}
+            state = dict(initial_state) if initial_state is not None else (json_file(path) if path.exists() else {'version': 1, 'status': 'prepared'})
+            state.setdefault('file_name', str(uuid.uuid4()) + '.jpg')
+            def transition() -> None:
+                if checkpoint is not None:
+                    checkpoint(dict(state))
+                save_state(path, state)
             if state.get('status') not in {'prepared', 'creating', 'created', 'attaching', 'complete'}:
                 raise ReviewNeeded(f'Unknown saved state; inspect {path} before continuing.')
             if state['status'] == 'creating':
@@ -279,28 +284,30 @@ def submit(api: Any, reporter: Any, report: Any, jpeg: Any, fingerprint: Any, st
                 raise InputError('No existing municipal case in the saved state. --retry-photo will not create one.')
             if state['status'] == 'attaching' and (not retry_photo):
                 raise ReviewNeeded(f'The report exists but its photo was not confirmed. Use the same arguments with --retry-photo after checking the municipal app. State: {path}')
+            if state['status'] == 'prepared':
+                transition()
             token = api.login()
             if state['status'] == 'prepared':
                 contact = api.contact(token, reporter)
                 state['status'] = 'creating'
-                save_state(path, state)
+                transition()
                 try:
                     result = api.create(token, contact, report)
                     if not result.get('WebCaseIdInCRM') or not result.get('CaseIdInCRM'):
                         raise APIError('Missing case reference.')
                     state['case'] = {k: result.get(k) for k in ('CaseIdInCRM', 'WebCaseIdInCRM', 'CaseNumberInCRM')}
                     state['status'] = 'created'
-                    save_state(path, state)
+                    transition()
                 except Exception as exc:
                     raise ReviewNeeded(f'Case creation result is uncertain. No automatic retry. Check the municipal app. State: {path}') from exc
             state['status'] = 'attaching'
-            save_state(path, state)
+            transition()
             try:
                 api.attach(token, state['case'], jpeg, state['file_name'])
             except Exception as exc:
                 raise ReviewNeeded(f"Report {state['case']['WebCaseIdInCRM']} exists; photo attachment was not confirmed. Use --retry-photo after checking the app. State: {path}") from exc
             state['status'] = 'complete'
-            save_state(path, state)
+            transition()
             return {'status': 'submitted', 'case': state['case'], 'photo_attached': True, 'state_file': str(path)}
     except Timeout as exc:
         raise ReviewNeeded('This same report is already being processed by another local process.') from exc

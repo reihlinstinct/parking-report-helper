@@ -139,3 +139,11 @@ GitHub Actions runs the suite on Python 3.10 to 3.13 for every push and pull req
 A separate job builds the Docker image, runs the tests inside it, and smoke-tests the
 container. Nothing is published. Workflows use read-only repository permissions and
 need no secrets.
+
+## Duplicate protection
+
+The API runner requires a durable private Git ledger for live use. Stable intake
+folder IDs and original-photo hashes cannot be silently reused with changed
+inputs. Uncertain creation blocks retries; complete receipts survive new runners.
+Private Actions serializes all 106 work; live remains disabled. See
+[docs/API106.md](docs/API106.md).
