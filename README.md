@@ -50,8 +50,9 @@ repo never receives private logs or artifacts. See [docs/INTAKE.md](docs/INTAKE.
 `--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem
 Municipality 106 web form (https://www.jerusalem.muni.il/he/contactus/106/): first
 and last name, ID type and number, phones, email, city, street, house number and the
-report text. The web form uses reCAPTCHA, so this browser mode never submits anything.
-A separately supplied API is supported by the optional API runner. You paste the values and attach up
+report text. This command only formats text/field values for manual use.
+The separately supplied API is supported by `parking-report-106`; no browser
+automation remains. You paste the values and attach up
 to 3 photos (png, jpg, pdf, tif, gif or doc, 5 MB each) yourself.
 
 ```sh
