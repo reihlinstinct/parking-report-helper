@@ -17,6 +17,7 @@ api = ["Pillow>=11.3,<13", "pyproj>=3.6,<4", "filelock>=3.13,<4"]
 [project.scripts]
 parking-report = "parking_report.cli:main"
 parking-report-106 = "parking_report.api_cli:main"
+parking-report-http = "parking_report.http_service:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
