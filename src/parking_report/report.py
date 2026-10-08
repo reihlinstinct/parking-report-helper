@@ -29,24 +29,32 @@ class Car:
     datetime: str
     car_type: str = ""
     notes: str = ""
+    draft_kind: str = "parking"
+    event_type: str = ""
 
     @classmethod
     def from_mapping(cls, data: object) -> Car:
         if not isinstance(data, Mapping):
             raise ValueError("each car must be a JSON object")
+        kind = data.get("draft_kind", "parking")
+        if kind not in {"parking", "municipal_issue"}:
+            raise ValueError("unknown draft kind")
+        required = REQUIRED if kind == "parking" else ("street", "datetime", "notes", "event_type")
         missing = [
             key
-            for key in REQUIRED
+            for key in required
             if not isinstance(data.get(key), str) or not data[key].strip()
         ]
         if missing:
             raise ValueError("missing field(s): " + ", ".join(missing))
         return cls(
-            plate=data["plate"].strip(),
+            plate=str(data.get("plate") or "").strip(),
             street=data["street"].strip(),
             datetime=data["datetime"],
             car_type=str(data.get("car_type") or "").strip(),
             notes=str(data.get("notes") or "").strip(),
+            draft_kind=kind,
+            event_type=str(data.get("event_type") or "").strip(),
         )
 
 
@@ -61,6 +69,14 @@ def build_report(
     place = f"ברחוב {record.street}"
     if city:
         place += f", {city}"
+    if record.draft_kind == "municipal_issue":
+        parts = [f"שלום, אני מדווח על מפגע: {record.notes}.",
+                 f"מיקום: {place}.", f"תאריך ושעה: {format_datetime(record.datetime)}."]
+        if with_photo:
+            parts.append("מצורפת תמונה.")
+        parts.extend(["אבקש לטפל במפגע ולעדכן אותי במספר הפנייה.",
+                      "תודה" + (f", {name}" if name else "")])
+        return " ".join(parts)
     plate_text = f"{record.plate} ({record.car_type})" if record.car_type else record.plate
     parts = [
         f"שלום, אני מדווח על רכב שחונה {record.notes or 'בחניה אסורה'}.",
