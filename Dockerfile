@@ -17,7 +17,7 @@ COPY tests ./tests
 COPY docs ./docs
 RUN python -m unittest discover -s tests -v
 
-FROM python:3.13-slim AS runtime
+FROM python:3.13-slim AS runtime-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONIOENCODING=utf-8
@@ -30,8 +30,11 @@ ENTRYPOINT ["parking-report"]
 CMD ["--help"]
 
 # Optional API runner, never embeds configuration or credentials.
-FROM runtime AS api
+FROM runtime-base AS api
 USER root
 RUN pip install --no-cache-dir "Pillow>=11.3,<13" "pyproj>=3.6,<4" "filelock>=3.13,<4"
 USER app
 ENTRYPOINT ["parking-report-106"]
+
+# Keep the default final image as the original core CLI.
+FROM runtime-base AS runtime
