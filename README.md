@@ -6,6 +6,7 @@
 [![Closed PRs](https://img.shields.io/github/issues-pr-closed/reihlinstinct/parking-report-helper)](https://github.com/reihlinstinct/parking-report-helper/pulls?q=is%3Apr+is%3Aclosed)
 [![Python 3.10-3.13](https://img.shields.io/badge/python-3.10%20to%203.13-blue?logo=python&logoColor=white)](pyproject.toml)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker&logoColor=white)](Dockerfile)
+[![License: MIT](https://img.shields.io/github/license/reihlinstinct/parking-report-helper)](LICENSE)
 
 A dependency-free Python CLI that turns a JSON list of vehicles into Hebrew
 parking-violation report drafts for use in Israel. It generates text only; it
