@@ -54,7 +54,8 @@ class TestReadIntake(unittest.TestCase):
                               "vehicle_lookup": "not_found_in_dataset",
                               "disability_lookup": "not_found_in_dataset"}
         car = record_to_car(record)
-        self.assertIn("לא נמצא לו רישיון בתוקף", car["registry_text"])
+        self.assertNotIn("רישיון", car["registry_text"])
+        self.assertIn("לא נמצא לרכב תג נכה", car["registry_text"])
 
     def test_bad_inputs(self):
         with self.assertRaises(ValueError):
