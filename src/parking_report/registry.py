@@ -79,8 +79,8 @@ def describe_he(result: Any) -> str:
     """Hebrew sentences for a municipal report from a lookup() result.
 
     Only make/model/colour, licence validity, last test date and disability tag
-    status are used. Unknown or failed lookups are said to be unverified, never
-    reported as a finding. Returns '' when there is no usable result."""
+    status are used. Unknown, unmatched or failed lookups are omitted, never
+    reported as a finding. Returns '' when nothing can be stated."""
     if not isinstance(result, dict) or not result.get('plate'):
         return ''
     checked = _he_date(result.get('checked_on'))
@@ -104,10 +104,7 @@ def describe_he(result: Any) -> str:
         test = _he_date(vehicle.get('mivchan_acharon_dt'))
         if test:
             parts.append(f'מבחן רישוי אחרון: {test}.')
-    elif vehicle_lookup == 'not_found_in_dataset':
-        parts.append('הרכב לא נמצא במאגר הרכבים הפעילים, ולכן לא נמצא לו רישיון בתוקף.')
-    else:
-        parts.append('בדיקת הרכב והרישיון לא הושלמה.')
+    # No match or failed lookup: say nothing about licence/test (unknown is not a finding).
     disability_lookup = result.get('disability_lookup')
     if disability_lookup == 'matched':
         tag = result.get('disability') if isinstance(result.get('disability'), dict) else {}
@@ -121,9 +118,8 @@ def describe_he(result: Any) -> str:
         parts.append(text + '.')
     elif disability_lookup == 'not_found_in_dataset':
         parts.append('לא נמצא לרכב תג נכה במאגר תגי הנכים.')
-    else:
-        parts.append('בדיקת תג הנכה לא הושלמה.')
-    return ' '.join(parts)
+    # Failed disability lookup: omitted as well.
+    return ' '.join(parts) if len(parts) > 1 else ''
 
 
 def main() -> int:

@@ -52,12 +52,15 @@ class DescribeTests(unittest.TestCase):
     def test_expired(self):
         self.assertIn("אין לרכב רישיון בתוקף", describe_he(self.matched("2026-09-01")))
 
-    def test_missing_and_unverified(self):
+    def test_unknown_is_omitted(self):
         text = describe_he(dict(self.base, vehicle_lookup="not_found_in_dataset",
                                 disability_lookup="unverified"))
-        self.assertIn("לא נמצא במאגר הרכבים", text)
-        self.assertIn("תג הנכה לא הושלמה", text)
-        self.assertNotIn("לא נמצא לרכב תג נכה", text)
+        self.assertEqual(text, "")
+        text = describe_he(dict(self.base, vehicle_lookup="unverified",
+                                disability_lookup="not_found_in_dataset"))
+        self.assertNotIn("רישיון", text)
+        self.assertNotIn("הושלמה", text)
+        self.assertIn("לא נמצא לרכב תג נכה", text)
 
     def test_no_owner_or_chassis_and_no_result(self):
         self.assertEqual(describe_he(None), "")

@@ -25,8 +25,7 @@ public posts beyond what the owner has approved. Municipal reports: when a repor
 record has a `registry` key (the lookup result), `intake.record_to_car` turns it into
 Hebrew sentences with `describe_he` (make/model/colour, licence validity, last test
 date, disability tag and its raw type code). The owner approved this on 2026-10-08;
-owner/chassis data are still never requested. A missing record is worded as "not
-found in the active-vehicle dataset", and failed lookups as "not completed", never
-as a finding. The final text is still shown to the owner before filing and then
+owner/chassis data are still never requested. A vehicle with no match in the active dataset (for example pre-1996) or a failed lookup
+is omitted from the text entirely; unknown is never worded as "no valid licence". The final text is still shown to the owner before filing and then
 frozen as `approved_description`. Coordinates are never added to report text.
 Data can be stale or incomplete; check unknown results before approving.
