@@ -41,7 +41,7 @@ def prepare(folder: Path, addresses: Path, reporter: Mapping[str, str]) -> tuple
     address = record["address"]
     resolved = Addresses(addresses).resolve(check_text(address["street"], "Street"),
                                           str(address["house_number"]), gps)
-    report = {"CaseDescription": build_report(car), "CaseSubjectCode": "1145",
+    report = {"CaseDescription": check_text(record["approved_description"], "Reviewed report text") if "approved_description" in record else build_report(car), "CaseSubjectCode": "1145",
         "CaseStreetCode": resolved["street_code"], "CaseStreetName": resolved["street_name"],
         "CaseHouseNumber": resolved["house"],
         "CaseAddressText": resolved["street_name"] + " " + resolved["house"],
