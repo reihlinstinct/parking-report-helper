@@ -75,3 +75,15 @@ creation/duplicate guards. Registry tests use mocked government responses. Gener
 photos and synthetic identities replace real data. CI runs Python 3.10-3.13 and
 Docker builds. Browser form/mock tests and live probes have been removed.
 No municipality requests occur in tests. docs/API106.md owns API/state semantics.
+
+## Municipal issue selection
+
+`subjects.py` loads a packaged, validated snapshot of municipal subject codes.
+Each report selects a subject in its own `municipal_subject` field. Intake uses
+the selected subject to choose vehicle or general-issue draft semantics; it
+never infers a subject from the photo or relabels the true event. Non-vehicle
+issues need no plate. Explicit routing records the owner choice and matching
+event type, and requires exact approved text before any live transport. The
+digest binds these fields as well as the existing payload and evidence.
+Missing selection preserves 1145 and the sidewalk-only live default. The legacy
+1145 flag is restricted to historical records. See SUBJECTS.md.
