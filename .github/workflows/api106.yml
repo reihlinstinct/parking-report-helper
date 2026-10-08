@@ -1,0 +1,71 @@
+name: Private Jerusalem 106 runner
+on:
+  workflow_call:
+    inputs:
+      helper_sha:
+        required: true
+        type: string
+      report_folder:
+        required: true
+        type: string
+      submit:
+        default: false
+        type: boolean
+      approved_sha256:
+        default: ''
+        type: string
+    secrets:
+      reporter_first_name: {required: true}
+      reporter_last_name: {required: true}
+      reporter_phone: {required: true}
+      reporter_id_number: {required: true}
+      reporter_email: {required: true}
+      subscription_key: {required: false}
+      api_username: {required: false}
+      api_password: {required: false}
+permissions:
+  contents: read
+jobs:
+  preview:
+    if: ${{ !inputs.submit }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with: {path: private}
+      - uses: actions/checkout@v7
+        with:
+          repository: reihlinstinct/parking-report-helper
+          ref: ${{ inputs.helper_sha }}
+          path: helper
+      - uses: actions/setup-python@v7
+        with: {python-version: '3.12'}
+      - run: python -m pip install './helper[api]'
+      - name: Validate private record without network calls
+        env:
+          FOLDER: ${{ inputs.report_folder }}
+          PARKING_REPORTER_FIRST_NAME: ${{ secrets.reporter_first_name }}
+          PARKING_REPORTER_LAST_NAME: ${{ secrets.reporter_last_name }}
+          PARKING_REPORTER_PHONE: ${{ secrets.reporter_phone }}
+          PARKING_REPORTER_ID_NUMBER: ${{ secrets.reporter_id_number }}
+          PARKING_REPORTER_EMAIL: ${{ secrets.reporter_email }}
+        run: |
+          test "${{ github.repository }}" = 'reihlinstinct/parking-reports'
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from parking_report.api_cli import main
+          root = Path('private').resolve()
+          folder = (root / os.environ['FOLDER']).resolve()
+          if not folder.is_relative_to(root) or folder == root:
+              raise SystemExit('Invalid report folder')
+          raise SystemExit(main([str(folder), '--addresses', str(root/'addresses.json')]))
+          PY
+  live:
+    # Intentionally disabled in this PR. Enabling must be a separate reviewed change.
+    if: ${{ inputs.submit }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo 'Live submission is disabled. Review the ledger and enablement design first.'
+          exit 1
