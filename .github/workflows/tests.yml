@@ -42,3 +42,21 @@ jobs:
           docker run --rm parking-report-helper:ci --help
           docker run --rm -v "$PWD:/data:ro" parking-report-helper:ci sample.json --city "Example City" | head -n 3
           test "$(docker run --rm --entrypoint id parking-report-helper:ci -u)" != 0
+      - name: Build Render HTTP image and smoke-test health without API credentials
+        run: |
+          docker build -f Dockerfile.render -t parking-http:ci .
+          docker run -d --name parking-http -p 127.0.0.1:10000:10000 -e PARKING_HTTP_TOKEN=synthetic-ci-token-0000000000000000 parking-http:ci
+          trap 'docker rm -f parking-http' EXIT
+          python - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(20):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:10000/healthz', timeout=2) as response:
+                      assert json.load(response)['submission_enabled'] is False
+                  break
+              except OSError:
+                  time.sleep(.5)
+          else:
+              raise SystemExit('Health smoke failed')
+          PY
+          test "$(docker exec parking-http id -u)" != 0

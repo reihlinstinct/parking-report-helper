@@ -38,5 +38,11 @@ RUN pip install --no-cache-dir "Pillow>=11.3,<13" "pyproj>=3.6,<4" "filelock>=3.
 USER app
 ENTRYPOINT ["parking-report-106"]
 
+# Render HTTP service: authenticated Login check only, no report submission.
+FROM api AS http
+EXPOSE 10000
+ENTRYPOINT ["parking-report-http"]
+CMD []
+
 # Keep the default final image as the original core CLI.
 FROM runtime-base AS runtime
