@@ -156,3 +156,12 @@ only. Health checks never contact the municipality and report submission is
 hard-disabled. No secrets belong in source/images/logs. See
 [docs/HTTP106.md](docs/HTTP106.md) for deploy variables, endpoints and free-hosting
 limits. No Render signup/deployment or municipal request is performed by CI.
+
+## Other municipal issues and per-report category selection
+
+The API runner accepts `municipal_subject` on each private `report.json`.
+Select any subject code from the captured catalog, including broken signs and
+graffiti. Non-parking drafts do not require a vehicle plate or request a parking
+inspector. Default sidewalk code 1145 stays unchanged. Exact owner review is
+still required before filing. See [SUBJECTS.md](docs/SUBJECTS.md) for the record
+fields, examples, snapshot limits and approval rules.
