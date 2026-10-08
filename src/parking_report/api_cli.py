@@ -73,6 +73,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 0
         if os.environ.get("PARKING_106_ENABLE_LIVE") != "true" or args.approved_sha256 != digest:
             raise ValueError("Live submission needs private enablement and the exact reviewed digest")
+        record = json.loads((args.folder / "report.json").read_text(encoding="utf-8"))
+        if record.get("violation", {}).get("category") != "sidewalk_parking":
+            raise ValueError("Live category 1145 requires explicitly classified sidewalk_parking")
         credentials = {"subscription_key": os.environ.get("PARKING_106_SUBSCRIPTION_KEY", ""),
             "login": {"UserName": os.environ.get("PARKING_106_USERNAME", ""),
                       "Password": os.environ.get("PARKING_106_PASSWORD", "")}}
