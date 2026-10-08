@@ -46,7 +46,6 @@ prints, or sets exit codes.
 input.json --> Car.from_mapping (validate) --> build_report            --> text
                                            \-> build_submissions(config, reporter)
                                                   |-> format_submission / submission_dict --> stdout
-                                                  \-> fill_page (browser, stops before submit)
 ```
 
 A submission is an ordered list of `(key, label, value)` rows, one per config field.
@@ -58,10 +57,10 @@ Intake (`--intake`, see `INTAKE.md`) replaces the JSON file as the source of car
 
 ## Error handling
 
-Input and usage problems raise `ValueError` (or `FillError` in the browser modules).
+Input and usage problems raise `ValueError`.
 `cli.main` turns them into `error: ...` on stderr and exit code 1, without tracebacks and
 without partial stdout. Invalid records name their 1-based position (`car 2: ...`).
-Option combinations that make no sense (for example `--fill` without `--municipality`)
+Option combinations that make no sense (for example `--reporter` without `--municipality`)
 are rejected by argparse with exit code 2 instead of being silently ignored.
 
 ## Extending
