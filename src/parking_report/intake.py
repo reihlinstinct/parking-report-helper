@@ -73,11 +73,11 @@ def record_to_car(record: object) -> dict[str, str]:
     location_description = _text(record.get("location_description"))
     if location_description:
         car["notes"] += f". תיאור המקום: {location_description}"
-    gps = record.get("gps")
-    if isinstance(gps, dict):
-        lat, lon = gps.get("lat"), gps.get("lon")
-        if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
-            car["notes"] += f". קואורדינטות צילום: {lat}, {lon}"
+    # Coordinates are never put in report text (owner decision 2026-10-08).
+    from .registry import describe_he
+    registry_text = describe_he(record.get("registry")) if parking else ""
+    if registry_text:
+        car["registry_text"] = registry_text
     if address.get("approximate"):
         car["notes"] += ". הכתובת היא קירוב לפי הבניין הממוספר הקרוב לנקודת הצילום"
     for key in (("plate", "datetime") if parking else ("datetime",)):
