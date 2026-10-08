@@ -183,3 +183,13 @@ graffiti. Non-parking drafts do not require a vehicle plate or request a parking
 inspector. Default sidewalk code 1145 stays unchanged. Exact owner review is
 still required before filing. See [SUBJECTS.md](docs/SUBJECTS.md) for the record
 fields, examples, snapshot limits and approval rules.
+
+## Monthly municipal draft (offline only)
+
+`python -m parking_report.monthly /private/ledger/reports.csv --month 2026-10`
+prepares a Hebrew monthly draft with counts by street/type and the complete
+municipal references. Unverified associations stay visibly unverified; duplicate
+IDs/references or invalid dates stop the draft. Plates and registry details are
+omitted. Use a private destination, never public logs/artifacts. No email,
+schedule, case verification or filing is performed. See [MONTHLY.md](docs/MONTHLY.md)
+for the CSV schema, counting limits and review requirement.
