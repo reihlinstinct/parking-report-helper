@@ -62,6 +62,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--submit", action="store_true")
     p.add_argument("--approved-sha256", default="")
     p.add_argument("--retry-photo", action="store_true")
+    p.add_argument("--approved-category-routing", choices=("crosswalk_parking", "blocked_ramp"),
+                   default="", help="Explicit reviewed routing of this true event type to category 1145")
     args = p.parse_args(argv)
     try:
         from .api106 import Municipality, submit
@@ -96,8 +98,12 @@ def execute(args: Any, contact: dict[str, Any], report: dict[str, Any], jpeg: by
         if os.environ.get("PARKING_106_ENABLE_LIVE") != "true" or args.approved_sha256 != digest:
             raise ValueError("Live submission needs private enablement and the exact reviewed digest")
         record = json.loads((args.folder / "report.json").read_text(encoding="utf-8"))
-        if record.get("violation", {}).get("category") != "sidewalk_parking":
-            raise ValueError("Live category 1145 requires explicitly classified sidewalk_parking")
+        category = record.get("violation", {}).get("category")
+        routing = getattr(args, "approved_category_routing", "")
+        if category != "sidewalk_parking" and not (
+            category in {"crosswalk_parking", "blocked_ramp"} and routing == category
+        ):
+            raise ValueError("Live category 1145 needs sidewalk parking or exact reviewed routing")
         credentials = {"subscription_key": os.environ.get("PARKING_106_SUBSCRIPTION_KEY", ""),
             "login": {"UserName": os.environ.get("PARKING_106_USERNAME", ""),
                       "Password": os.environ.get("PARKING_106_PASSWORD", "")}}
