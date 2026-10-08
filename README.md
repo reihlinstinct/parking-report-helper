@@ -16,6 +16,15 @@ The optional 106 API runner supports explicitly approved local submissions; its
 reusable private-repo workflow is preview-only until separately enabled. See
 [docs/API106.md](docs/API106.md).
 
+## Engine versus operational system
+
+This repository provides reusable code, a captured municipal subject catalog and
+synthetic tests. It is not a store of real reports or an unattended filing service.
+Private callers run reviewed commits beside their own evidence and credentials.
+Authorized collaborators can read the whole-system diagram and explanation in the
+private companion repository: `parking-reports`, `docs/ARCHITECTURE.md`.
+Private report records, registry snapshots and reporter identity never belong here.
+
 ## Requirements
 
 Python 3.10 or later, or Docker. No third-party dependencies are needed.
