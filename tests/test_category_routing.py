@@ -14,9 +14,9 @@ class CategoryRoutingTests(unittest.TestCase):
                 folder=folder,state_dir=folder/'state',retry_photo=False)
             with patch.dict('os.environ',{'PARKING_106_ENABLE_LIVE':'true'}),patch('parking_report.api106.Municipality'),patch('parking_report.api106.submit',return_value={'status':'submitted','photo_attached':True}) as submit:
                 if allowed:
-                    execute(args,{}, {}, b'', 'digest', None, {'state':{}}, 'id');submit.assert_called_once()
+                    execute(args,{}, {"CaseSubjectCode":"1145"}, b'', 'digest', None, {'state':{}}, 'id');submit.assert_called_once()
                 else:
-                    with self.assertRaises(ValueError):execute(args,{}, {}, b'', 'digest', None, {'state':{}}, 'id')
+                    with self.assertRaises(ValueError):execute(args,{}, {"CaseSubjectCode":"1145"}, b'', 'digest', None, {'state':{}}, 'id')
                     submit.assert_not_called()
     def test_default_does_not_widen(self):
         for category in ['crosswalk_parking','blocked_ramp','other']:
