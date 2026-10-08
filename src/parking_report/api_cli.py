@@ -12,6 +12,7 @@ from typing import Any
 
 from .intake import record_to_car
 from .report import build_report
+from .subjects import select_subject, validate_owner_choice
 
 
 def private_values(env: Mapping[str, str]) -> dict[str, str]:
@@ -41,13 +42,15 @@ def prepare(folder: Path, addresses: Path, reporter: Mapping[str, str]) -> tuple
     address = record["address"]
     resolved = Addresses(addresses).resolve(check_text(address["street"], "Street"),
                                           str(address["house_number"]), gps)
-    report = {"CaseDescription": check_text(record["approved_description"], "Reviewed report text") if "approved_description" in record else build_report(car), "CaseSubjectCode": "1145",
+    report = {"CaseDescription": check_text(record["approved_description"], "Reviewed report text") if "approved_description" in record else build_report(car), "CaseSubjectCode": select_subject(record),
         "CaseStreetCode": resolved["street_code"], "CaseStreetName": resolved["street_name"],
         "CaseHouseNumber": resolved["house"],
         "CaseAddressText": resolved["street_name"] + " " + resolved["house"],
         "CoordinateX": resolved["x"], "CoordinateY": resolved["y"],
         "Language": 1, "ApplicationCaseNumber": "ApplicationCaseNumber_VAL"}
-    canonical = json.dumps({"reporter": contact, "report": report, "picture": photo_hash},
+    canonical = json.dumps({"reporter": contact, "report": report, "picture": photo_hash,
+                            "event_type": record.get("violation", {}).get("category"),
+                            "municipal_subject": record.get("municipal_subject")},
                            ensure_ascii=False, sort_keys=True)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return contact, report, jpeg, digest
@@ -63,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--approved-sha256", default="")
     p.add_argument("--retry-photo", action="store_true")
     p.add_argument("--approved-category-routing", choices=("crosswalk_parking", "blocked_ramp"),
-                   default="", help="Explicit reviewed routing of this true event type to category 1145")
+                   default="", help="Deprecated: historical exact routing to 1145; use report.json municipal_subject")
     args = p.parse_args(argv)
     try:
         from .api106 import Municipality, submit
@@ -100,10 +103,14 @@ def execute(args: Any, contact: dict[str, Any], report: dict[str, Any], jpeg: by
         record = json.loads((args.folder / "report.json").read_text(encoding="utf-8"))
         category = record.get("violation", {}).get("category")
         routing = getattr(args, "approved_category_routing", "")
-        if category != "sidewalk_parking" and not (
-            category in {"crosswalk_parking", "blocked_ramp"} and routing == category
-        ):
-            raise ValueError("Live category 1145 needs sidewalk parking or exact reviewed routing")
+        if routing:
+            # Compatibility only for already reviewed historic reports. Never a global code switch.
+            if (record.get("municipal_subject") is not None
+                    or report.get("CaseSubjectCode") != "1145"
+                    or category not in {"crosswalk_parking", "blocked_ramp"} or routing != category):
+                raise ValueError("Legacy routing applies only to the exact historic 1145 event")
+        else:
+            validate_owner_choice(record, report["CaseSubjectCode"])
         credentials = {"subscription_key": os.environ.get("PARKING_106_SUBSCRIPTION_KEY", ""),
             "login": {"UserName": os.environ.get("PARKING_106_USERNAME", ""),
                       "Password": os.environ.get("PARKING_106_PASSWORD", "")}}
