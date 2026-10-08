@@ -63,6 +63,69 @@ def lookup(plate: str, today: date, fetch: Callable[..., dict[str, Any]] = query
     return out
 
 
+def _he_date(value: Any) -> str:
+    """'2026-10-08T00:00:00' -> '8.10.2026'; empty string when unusable."""
+    text = str(value).strip()
+    if re.fullmatch(r'\d{8}', text):  # the tag dataset stores 20260101
+        text = f'{text[:4]}-{text[4:6]}-{text[6:]}'
+    try:
+        d = date.fromisoformat(text[:10])
+    except ValueError:
+        return ''
+    return f'{d.day}.{d.month}.{d.year}'
+
+
+def describe_he(result: Any) -> str:
+    """Hebrew sentences for a municipal report from a lookup() result.
+
+    Only make/model/colour, licence validity, last test date and disability tag
+    status are used. Unknown or failed lookups are said to be unverified, never
+    reported as a finding. Returns '' when there is no usable result."""
+    if not isinstance(result, dict) or not result.get('plate'):
+        return ''
+    checked = _he_date(result.get('checked_on'))
+    parts = ['בדיקה במאגרי משרד התחבורה' + (f' (נכון ל-{checked})' if checked else '') + ':']
+    vehicle_lookup = result.get('vehicle_lookup')
+    vehicle = result.get('vehicle') if isinstance(result.get('vehicle'), dict) else {}
+    if vehicle_lookup == 'matched':
+        name = ' '.join(str(vehicle[k]).strip() for k in ('tozeret_nm', 'degem_nm') if vehicle.get(k))
+        if vehicle.get('kinuy_mishari'):
+            name += f" ({str(vehicle['kinuy_mishari']).strip()})"
+        if name:
+            parts.append(f'רכב מסוג {name}' + (f", צבע {str(vehicle['tzeva_rechev']).strip()}." if vehicle.get('tzeva_rechev') else '.'))
+        expiry = _he_date(vehicle.get('tokef_dt'))
+        status = result.get('licence_status')
+        if expiry and status == 'valid_on_check_date':
+            parts.append(f'תוקף רישיון הרכב עד {expiry} (בתוקף).')
+        elif expiry and status == 'expired_on_check_date':
+            parts.append(f'תוקף רישיון הרכב פג ב-{expiry}; אין לרכב רישיון בתוקף.')
+        else:
+            parts.append('תוקף הרישיון לא אומת.')
+        test = _he_date(vehicle.get('mivchan_acharon_dt'))
+        if test:
+            parts.append(f'מבחן רישוי אחרון: {test}.')
+    elif vehicle_lookup == 'not_found_in_dataset':
+        parts.append('הרכב לא נמצא במאגר הרכבים הפעילים, ולכן לא נמצא לו רישיון בתוקף.')
+    else:
+        parts.append('בדיקת הרכב והרישיון לא הושלמה.')
+    disability_lookup = result.get('disability_lookup')
+    if disability_lookup == 'matched':
+        tag = result.get('disability') if isinstance(result.get('disability'), dict) else {}
+        text = 'לרכב רשום תג נכה במאגר תגי הנכים'
+        kind = tag.get('SUG TAV')
+        if kind not in (None, ''):
+            text += f' (קוד סוג תג: {str(kind).strip()})'
+        issued = _he_date(tag.get('TAARICH HAFAKAT TAG'))
+        if issued:
+            text += f', הונפק ב-{issued}'
+        parts.append(text + '.')
+    elif disability_lookup == 'not_found_in_dataset':
+        parts.append('לא נמצא לרכב תג נכה במאגר תגי הנכים.')
+    else:
+        parts.append('בדיקת תג הנכה לא הושלמה.')
+    return ' '.join(parts)
+
+
 def main() -> int:
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('record',type=Path)
