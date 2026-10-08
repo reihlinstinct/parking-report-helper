@@ -8,6 +8,7 @@ RUN pip wheel --no-cache-dir --no-deps --wheel-dir /wheels .
 
 # Run the test suite: docker build --target test .
 FROM python:3.13-slim AS test
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY --from=build /wheels /wheels
@@ -32,6 +33,7 @@ CMD ["--help"]
 # Optional API runner, never embeds configuration or credentials.
 FROM runtime-base AS api
 USER root
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir "Pillow>=11.3,<13" "pyproj>=3.6,<4" "filelock>=3.13,<4"
 USER app
 ENTRYPOINT ["parking-report-106"]
