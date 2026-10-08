@@ -42,16 +42,22 @@ def prepare(folder: Path, addresses: Path, reporter: Mapping[str, str]) -> tuple
     address = record["address"]
     resolved = Addresses(addresses).resolve(check_text(address["street"], "Street"),
                                           str(address["house_number"]), gps)
-    report = {"CaseDescription": check_text(record["approved_description"], "Reviewed report text") if "approved_description" in record else build_report(car), "CaseSubjectCode": select_subject(record),
+    description = build_report(car)
+    if "approved_description" in record:
+        check_text(record["approved_description"], "Reviewed report text")
+        description = record["approved_description"]  # Preserve exact reviewed whitespace too.
+    report = {"CaseDescription": description, "CaseSubjectCode": select_subject(record),
         "CaseStreetCode": resolved["street_code"], "CaseStreetName": resolved["street_name"],
         "CaseHouseNumber": resolved["house"],
         "CaseAddressText": resolved["street_name"] + " " + resolved["house"],
         "CoordinateX": resolved["x"], "CoordinateY": resolved["y"],
         "Language": 1, "ApplicationCaseNumber": "ApplicationCaseNumber_VAL"}
-    canonical = json.dumps({"reporter": contact, "report": report, "picture": photo_hash,
-                            "event_type": record.get("violation", {}).get("category"),
-                            "municipal_subject": record.get("municipal_subject")},
-                           ensure_ascii=False, sort_keys=True)
+    fingerprint = {"reporter": contact, "report": report, "picture": photo_hash}
+    if record.get("municipal_subject") is not None:
+        # Preserve historical fingerprints/receipts when using the unchanged default.
+        fingerprint.update(event_type=record.get("violation", {}).get("category"),
+                           municipal_subject=record["municipal_subject"])
+    canonical = json.dumps(fingerprint, ensure_ascii=False, sort_keys=True)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return contact, report, jpeg, digest
 
