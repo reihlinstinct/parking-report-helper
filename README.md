@@ -2,7 +2,10 @@
 
 A dependency-free Python CLI that turns a JSON list of vehicles into Hebrew
 parking-violation report drafts for use in Israel. It generates text only; it
-does not submit reports. An optional browser helper can fill a municipal web form and stops before submitting.
+does not submit reports by default. An optional browser helper stops before submitting.
+The optional 106 API runner supports explicitly approved local submissions; its
+reusable private-repo workflow is preview-only until separately enabled. See
+[docs/API106.md](docs/API106.md).
 
 ## Requirements
 
@@ -47,8 +50,8 @@ repo never receives private logs or artifacts. See [docs/INTAKE.md](docs/INTAKE.
 `--municipality jerusalem` prints copy-paste values for the fields of the Jerusalem
 Municipality 106 web form (https://www.jerusalem.muni.il/he/contactus/106/): first
 and last name, ID type and number, phones, email, city, street, house number and the
-report text. No email address or public API is documented for reports, and the form
-uses reCAPTCHA, so the tool never submits anything. You paste the values and attach up
+report text. The web form uses reCAPTCHA, so this browser mode never submits anything.
+A separately supplied API is supported by the optional API runner. You paste the values and attach up
 to 3 photos (png, jpg, pdf, tif, gif or doc, 5 MB each) yourself.
 
 ```sh
