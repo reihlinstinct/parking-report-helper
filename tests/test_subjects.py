@@ -94,6 +94,17 @@ class SubjectTests(unittest.TestCase):
             out = subprocess.run(cmd, env=env, capture_output=True, text=True)
             self.assertEqual(out.returncode, 0, out.stderr)
             self.assertEqual(json.loads(out.stdout)["network_requests"], 0)
+            r["approved_description"] = "  " + r["approved_description"] + "\n"
+            save()
+            self.assertEqual(prepare(folder, addresses, reporter)[1]["CaseDescription"], r["approved_description"])
+            r = record(); del r["municipal_subject"]; r["plate"] = "0000000"
+            r["violation"]["category"] = "sidewalk_parking"; save()
+            contact, payload, _, historic_digest = prepare(folder, addresses, reporter)
+            from parking_report.api106 import read_picture
+            import hashlib
+            historic = json.dumps({"reporter": contact, "report": payload,
+                                   "picture": read_picture(folder/"photo.jpg")[0]}, ensure_ascii=False, sort_keys=True)
+            self.assertEqual(historic_digest, hashlib.sha256(historic.encode()).hexdigest())
             for mutate in (lambda: r["municipal_subject"].update(code="1016"),
                            lambda: r["municipal_subject"].update(owner_choice=False),
                            lambda: r["violation"].update(category="broken_sign"),
