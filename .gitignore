@@ -7,3 +7,8 @@ htmlcov/
 .env
 .env.*
 !.env.example
+
+credentials.json
+reporter.json
+addresses.json
+.106-state/
