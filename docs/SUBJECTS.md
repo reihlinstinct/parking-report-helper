@@ -62,7 +62,8 @@ and original photo. Any change requires a new review. Private live enablement,
 exact digest, durable ledger, stable ID and photo duplicate guards still apply.
 This change makes no filings and changes no private workflow pins.
 
-Old sidewalk records without `municipal_subject` retain their 1145 gate. The old
+Old sidewalk records without `municipal_subject` retain their 1145 gate and
+historical fingerprint format, so existing ledger receipts remain readable. The old
 `--approved-category-routing` flag is deprecated but retained only for already
 reviewed historic crosswalk/ramp records routed to 1145. It cannot be combined
 with the new per-report selection, cannot choose another code and cannot change
