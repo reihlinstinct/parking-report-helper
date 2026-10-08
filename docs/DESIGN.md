@@ -4,7 +4,9 @@
 
 Turn a JSON list of reported vehicles into text a person can send to a municipality:
 either a Hebrew report draft, or the values of a municipality's web form. A person
-always reviews and submits. The tool never submits anything.
+always reviews. Browser mode never submits; the optional API runner requires an
+exact preview digest and explicit live enablement. The reusable workflow is
+preview-only. See API106.md for the separate API boundary.
 
 ## Non-goals and safety invariants
 
