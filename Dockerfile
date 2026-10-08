@@ -11,7 +11,7 @@ FROM python:3.13-slim AS test
 ENV PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 COPY --from=build /wheels /wheels
-RUN pip install --no-cache-dir /wheels/*.whl
+RUN pip install --no-cache-dir /wheels/*.whl "Pillow>=11.3,<13" "pyproj>=3.6,<4" "filelock>=3.13,<4"
 COPY sample.json ./sample.json
 COPY tests ./tests
 COPY docs ./docs
@@ -28,3 +28,10 @@ USER app
 WORKDIR /data
 ENTRYPOINT ["parking-report"]
 CMD ["--help"]
+
+# Optional API runner, never embeds configuration or credentials.
+FROM runtime AS api
+USER root
+RUN pip install --no-cache-dir "Pillow>=11.3,<13" "pyproj>=3.6,<4" "filelock>=3.13,<4"
+USER app
+ENTRYPOINT ["parking-report-106"]
