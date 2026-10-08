@@ -147,3 +147,12 @@ folder IDs and original-photo hashes cannot be silently reused with changed
 inputs. Uncertain creation blocks retries; complete receipts survive new runners.
 Private Actions serializes all 106 work; live remains disabled. See
 [docs/API106.md](docs/API106.md).
+
+## Render HTTP connectivity check
+
+A non-root Docker web service is available via `Dockerfile.render` (or the `http`
+Docker target). It provides bearer-authenticated, manually invoked Login checking
+only. Health checks never contact the municipality and report submission is
+hard-disabled. No secrets belong in source/images/logs. See
+[docs/HTTP106.md](docs/HTTP106.md) for deploy variables, endpoints and free-hosting
+limits. No Render signup/deployment or municipal request is performed by CI.
