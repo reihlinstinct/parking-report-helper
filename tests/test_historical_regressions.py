@@ -27,7 +27,10 @@ class HistoricalWorkflowTests(unittest.TestCase):
 
     def test_current_workflows_have_balanced_expressions_and_static_coverage_name(self):
         root = Path(__file__).resolve().parents[1]
-        for file in (root / '.github/workflows').glob('*.yml'):
+        workflow_dir = root / '.github/workflows'
+        if not workflow_dir.is_dir():
+            self.skipTest('Source-only workflows are excluded from the Docker test image')
+        for file in workflow_dir.glob('*.yml'):
             with self.subTest(workflow=file.name):
                 assert_workflow_expressions(file.read_text())
         text = (root / '.github/workflows/tests.yml').read_text()
