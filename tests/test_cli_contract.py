@@ -356,6 +356,11 @@ class PolicyDocTest(unittest.TestCase):
             "never kept working just to honour a deprecation",
             "never weakens an existing safety or approval",
             "`CHANGELOG.md` entry",
+            # Each obligation of decision 6433915118, pinned one by one.
+            "states the\n   compatibility impact and the migration, updates this file",
+            "announced\n   as a deprecation first",
+            "needs a contract update, tests, a `CHANGELOG.md` entry and the right\n   semver bump",
+            "The PR documents the exception and the migration.",
         ):
             self.assertIn(clause, section)
 
