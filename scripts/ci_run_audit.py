@@ -7,9 +7,10 @@ object, or just its ``workflow_runs`` list). This script never calls the
 network, never dispatches or re-runs anything, and prints only counts and
 short commit SHAs.
 
-A *duplicate* is a run for a commit that already has a run from the other
-trigger: the same ``head_sha`` ran once for ``push`` and once for
-``pull_request``. That happens when a workflow triggers on ``push`` to every
+A *duplicate* is a ``push`` run for a commit that also ran for
+``pull_request``: the same ``head_sha`` ran for both triggers. ``extra runs``
+counts those push runs, which is what limiting ``push`` to the default branch
+would remove; repeated runs of one event are not counted. That happens when a workflow triggers on ``push`` to every
 branch as well as on ``pull_request`` and the PR branch lives in the same
 repository.
 
@@ -56,9 +57,10 @@ def audit(runs, default_branch="main"):
         kinds = {run["event"] for run in group}
         if not PAIR <= kinds:
             continue
-        # Count every run beyond one per commit among the overlapping pair.
-        pair_runs = [run for run in group if run["event"] in PAIR]
-        extra_runs += len(pair_runs) - 1
+        # The push runs of a commit that also ran for pull_request are the
+        # runs a push-to-default-branch-only trigger would remove. Repeated
+        # pull_request runs of the same SHA are not trigger overlap.
+        extra_runs += sum(run["event"] == "push" for run in group)
         duplicated.append(sha)
     pr_branch_pushes = sum(
         1
@@ -99,11 +101,18 @@ def render(summary, jobs_per_run=None):
     return "\n".join(lines)
 
 
+def _positive_int(text):
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return value
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("runs_json")
     ap.add_argument("--default-branch", default="main")
-    ap.add_argument("--jobs-per-run", type=int, default=None)
+    ap.add_argument("--jobs-per-run", type=_positive_int, default=None)
     args = ap.parse_args(argv)
     try:
         with open(args.runs_json, encoding="utf-8") as fh:

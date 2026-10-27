@@ -40,13 +40,33 @@ class AuditTests(unittest.TestCase):
         runs = [run("push", "d" * 40), run("push", "d" * 40)]
         self.assertEqual(a.audit(runs)["extra_runs"], 0)
 
-    def test_extra_runs_counts_every_run_beyond_one_per_commit(self):
+    def test_repeated_pull_request_runs_are_not_extra(self):
+        # Review r4392397070: a second pull_request run of one SHA (reopen,
+        # base change) is a same-event repeat; push-to-main-only removes only
+        # the push run, so the saving is 1.
         runs = [
             run("push", "e" * 40),
             run("pull_request", "e" * 40),
             run("pull_request", "e" * 40),
         ]
+        self.assertEqual(a.audit(runs)["extra_runs"], 1)
+
+    def test_every_push_run_of_an_overlapping_commit_is_extra(self):
+        runs = [
+            run("push", "6" * 40),
+            run("push", "6" * 40),
+            run("pull_request", "6" * 40),
+        ]
         self.assertEqual(a.audit(runs)["extra_runs"], 2)
+
+    def test_jobs_per_run_must_be_positive(self):
+        for bad in ("0", "-7", "x"):
+            with (
+                self.subTest(bad=bad),
+                redirect_stderr(io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                a.main(["unused.json", "--jobs-per-run", bad])
 
     def test_other_events_do_not_create_overlap(self):
         runs = [run("push", "f" * 40), run("workflow_dispatch", "f" * 40)]

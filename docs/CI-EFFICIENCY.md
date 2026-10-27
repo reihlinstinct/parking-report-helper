@@ -81,7 +81,7 @@ on:
 
   PRs keep the `pull_request` run, which tests the merge ref. `main` keeps a run on every push.
 - **Trade-off:** a branch pushed without an open PR gets no Tests run until a PR opens. `workflow_dispatch` can still run one by hand.
-- **Needs a maintainer check:** that the required status checks in branch protection come from the `pull_request` run. The check names stay the same, but this audit cannot read repository settings.
+- **Required checks:** none. Instinct verified on 2026-10-27 (review request 6444556068 on #130) that branch protection on `main` has no required status checks, so this change cannot break a required check. If required checks are added later, they should come from the `pull_request` run; the check names stay the same.
 - **Contract test for that PR:** `push` is limited to `main`; `pull_request` has no branch filter; the job names and the matrix stay unchanged.
 
 ### 2. Cancel superseded PR runs (optional)
@@ -98,7 +98,7 @@ Gitleaks also runs twice per PR-branch commit. But secret scanning on every push
 
 ### Not proposed
 
-- **Folding coverage into the Python 3.12 job.** It would save 1 job per run, but it would remove or rename the `Coverage report` check. If that check is required, the merge gate breaks. Revisit only after checking branch protection.
+- **Folding coverage into the Python 3.12 job.** It would save 1 job per run, but it would remove or rename the `Coverage report` check. No check is required today (verified 2026-10-27), so nothing breaks, but the saving is 1 short job per run and the separate `Coverage report` check is easier to read. Not worth the change now.
 - **pip caching.** Installs take 4–10 s per job, which is about what a cache restore costs, so caching gains nothing measurable.
 - **Dropping the tests inside the Docker build (`--target test`).** That step is the container check: it verifies the image's own environment. Keep it.
 
