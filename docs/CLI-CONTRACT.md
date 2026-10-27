@@ -29,7 +29,7 @@ version is `0.2.0`, so nothing here is a stability promise yet; see
         "--reporter": {"default": null},
         "--json": {"default": false, "flag": true}
       },
-      "exit_codes": {"0": "report text (or --json submissions) on stdout", "1": "input/config error, `error: ...` on stderr", "2": "usage error (argparse or a flag-combination rule)"},
+      "exit_codes": {"0": "report text (or --json submissions) on stdout; also --help text", "1": "input/config error, `error: ...` on stderr", "2": "usage error (argparse or a flag-combination rule), usage text on stderr"},
       "json_output": "only with --municipality"
     },
     "parking-report-106": {
@@ -44,8 +44,8 @@ version is `0.2.0`, so nothing here is a stability promise yet; see
         "--retry-photo": {"default": false, "flag": true},
         "--approved-category-routing": {"default": "", "choices": ["crosswalk_parking", "blocked_ramp"], "deprecated": true}
       },
-      "exit_codes": {"0": "one JSON line: dry_run or submit result", "2": "usage error (argparse)", "4": "blocked: fixed JSON line, no exception text"},
-      "json_output": "always (one line on stdout)",
+      "exit_codes": {"0": "one JSON line: dry_run or submit result; --help prints argparse help text instead", "2": "usage error: argparse usage text on stderr, no JSON", "4": "blocked: fixed JSON line, no exception text"},
+      "json_output": "one line on stdout for every outcome after successful argument parsing",
       "stdout_keys": {
         "dry_run": ["status", "sha256", "photo_upload_bytes", "network_requests"],
         "submit": ["status", "sha256", "photo_attached"],
@@ -57,7 +57,9 @@ version is `0.2.0`, so nothing here is a stability promise yet; see
       "positionals": [],
       "options": {},
       "environment": ["PARKING_HTTP_TOKEN", "PORT"],
+      "argv": "ignored (not parsed, not rejected)",
       "exit_codes": {"1": "invalid configuration: fixed message on stderr, no exception text"},
+      "config_error_message": "HTTP service configuration is invalid; check private environment",
       "json_output": "HTTP responses only; see docs/HTTP106.md"
     }
   }
@@ -68,8 +70,8 @@ version is `0.2.0`, so nothing here is a stability promise yet; see
 ## Notes on current behaviour
 
 - **`parking-report`** needs exactly one of `input` or `--intake DIR`. `--drive-folder` requires `--intake`, `--drive-api` requires `--drive-folder` (it's for a local test server only and is hidden from `--help`), and `--reporter` and `--json` require `--municipality`. A broken rule exits 2 with an argparse usage message.
-- **`parking-report-106`** prints exactly one JSON line in every outcome. Every exception after argument parsing becomes the fixed `blocked` line with exit 4, and no exception text reaches the log. A live submission additionally needs `PARKING_106_ENABLE_LIVE=true`, the exact `--approved-sha256` and `--ledger-dir`; otherwise it ends `blocked`.
-- **`parking-report-http`** takes no arguments. A missing or short `PARKING_HTTP_TOKEN` or an invalid `PORT` exits 1 with a fixed message. Otherwise it serves until it's stopped.
+- **`parking-report-106`** prints exactly one JSON line for every outcome *after argument parsing succeeds*: `dry_run` or `submit` (exit 0), or the fixed `blocked` line (exit 4). Every exception after parsing becomes that `blocked` line, and no exception text reaches the log. Before that point argparse owns the output: `--help` prints help text and exits 0, and a usage error prints usage text to stderr and exits 2. Neither is JSON. A live submission additionally needs `PARKING_106_ENABLE_LIVE=true`, the exact `--approved-sha256` and `--ledger-dir`; otherwise it ends `blocked`.
+- **`parking-report-http`** doesn't read command-line arguments: `main()` takes none and never looks at `sys.argv`, so extra arguments are **ignored, not rejected**. Rejecting them would be a behaviour change for a separate PR. A missing or short `PARKING_HTTP_TOKEN` or an invalid `PORT` exits 1 with the fixed message in `config_error_message`. Otherwise it serves until it's stopped.
 
 ## Known gaps (measured, not fixed here)
 

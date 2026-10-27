@@ -18,7 +18,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from parking_report import api_cli, cli, http_service
 
@@ -194,6 +194,21 @@ class ExitCodeTest(unittest.TestCase):
         self.assertEqual(line["status"], "blocked")
         self.assertEqual(err, "")
 
+    def test_parking_report_106_help_and_usage_are_argparse_text_not_json(
+        self,
+    ) -> None:
+        # The one-JSON-line guarantee starts after argument parsing (#126 review).
+        code, out, err = run(api_cli.main, ["--help"])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("usage: "))
+        self.assertNotIn("{", out.splitlines()[0])
+        self.assertEqual(err, "")
+        code, out, err = run(api_cli.main, ["folder"])  # --addresses missing
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertIn("usage: ", err)
+        self.assertIn("--addresses", err)
+
     def test_parking_report_http_invalid_config_exits_with_fixed_message(self) -> None:
         spec = self.contract["parking-report-http"]
         self.assertEqual(set(spec["exit_codes"]), {"1"})
@@ -207,12 +222,104 @@ class ExitCodeTest(unittest.TestCase):
             ):
                 http_service.main()
             server.assert_not_called()
-            message = str(raised.exception.code)
-            self.assertIsInstance(
-                raised.exception.code, str
-            )  # str code -> exit status 1
-            self.assertNotIn("x" * 32, message)
-            self.assertNotIn("70000", message)
+            # A str exit code means exit status 1, with the message on stderr.
+            self.assertIsInstance(raised.exception.code, str)
+            self.assertEqual(raised.exception.code, spec["config_error_message"])
+
+    def test_parking_report_http_ignores_extra_argv(self) -> None:
+        spec = self.contract["parking-report-http"]
+        self.assertEqual(spec["argv"], "ignored (not parsed, not rejected)")
+        env = {"PARKING_HTTP_TOKEN": "z" * 32, "PORT": "10001"}
+        argv = ["parking-report-http", "--no-such-flag", "extra"]
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("sys.argv", argv),
+            patch.object(http_service, "make_server") as server,
+        ):
+            http_service.main()  # no SystemExit: the extra arguments are ignored
+        server.assert_called_once()
+        self.assertEqual(server.call_args.args[:2], ("0.0.0.0", 10001))
+        server.return_value.__enter__.return_value.serve_forever.assert_called_once()
+
+
+# Synthetic placeholder reporter values; prepare() is mocked and never reads them.
+SYNTHETIC_REPORTER_ENV = {
+    "PARKING_REPORTER_" + key.upper(): "synthetic"
+    for key in ("first_name", "last_name", "phone", "id_number", "email")
+}
+
+
+class SuccessOutputTest(unittest.TestCase):
+    """Synthetic success paths for parking-report-106 (#126 review, finding 3).
+
+    prepare(), the photo read, the ledger and the municipal client are all
+    mocked: no network, no port, no live account and no real submission.
+    """
+
+    DIGEST = "0" * 64
+
+    def setUp(self) -> None:
+        self.keys = load_contract()["commands"]["parking-report-106"]["stdout_keys"]
+        self.tmp = TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.folder = Path(self.tmp.name) / "report-1"
+        self.folder.mkdir()
+        (self.folder / "report.json").write_text(
+            json.dumps({"photo": "p.jpg"}), encoding="utf-8"
+        )
+        prepared = ({}, {"CaseSubjectCode": "0"}, b"jpeg", self.DIGEST)
+        for target, value in (
+            ("parking_report.api_cli.prepare", prepared),
+            ("parking_report.api106.read_picture", ("h", None, b"jpeg")),
+        ):
+            patcher = patch(target, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _argv(self, *extra: str) -> list[str]:
+        return [str(self.folder), "--addresses", "a.json", *extra]
+
+    def test_dry_run_line_matches_contract(self) -> None:
+        with patch.dict("os.environ", SYNTHETIC_REPORTER_ENV, clear=True):
+            code, out, err = run(api_cli.main, self._argv())
+        self.assertEqual(code, 0)
+        line = json.loads(out)
+        self.assertEqual(sorted(line), sorted(self.keys["dry_run"]))
+        self.assertEqual(line["status"], "dry_run")
+        self.assertEqual(line["network_requests"], 0)
+        self.assertEqual(err, "")
+
+    def test_submit_line_matches_contract(self) -> None:
+        ledger = MagicMock()
+        ledger.reserve.return_value = {"state": {}}
+        env = dict(SYNTHETIC_REPORTER_ENV, PARKING_106_ENABLE_LIVE="true")
+        with (
+            patch.dict("os.environ", env, clear=True),
+            patch("parking_report.ledger.GitLedger", return_value=ledger),
+            patch("parking_report.api_cli.validate_owner_choice"),
+            patch("parking_report.api106.Municipality") as municipality,
+            patch(
+                "parking_report.api106.submit",
+                return_value={"status": "submitted", "photo_attached": True},
+            ) as submit,
+        ):
+            code, out, err = run(
+                api_cli.main,
+                self._argv(
+                    "--submit",
+                    "--approved-sha256",
+                    self.DIGEST,
+                    "--ledger-dir",
+                    self.tmp.name,
+                ),
+            )
+        self.assertEqual(code, 0)
+        submit.assert_called_once()
+        self.assertIs(submit.call_args.args[0], municipality.return_value)
+        line = json.loads(out)
+        self.assertEqual(sorted(line), sorted(self.keys["submit"]))
+        self.assertEqual(line["status"], "submitted")
+        self.assertEqual(err, "")
 
 
 if __name__ == "__main__":
