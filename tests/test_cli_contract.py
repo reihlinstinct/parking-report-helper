@@ -76,6 +76,10 @@ def describe(parser: argparse.ArgumentParser) -> tuple[list[str], dict]:
             entry["choices"] = list(action.choices)
         if action.help == argparse.SUPPRESS:
             entry["hidden"] = True
+        elif (action.help or "").startswith("Deprecated"):
+            # The contract's deprecation marker must match the parser's help,
+            # so a flag can't silently lose (or gain) its deprecated status.
+            entry["deprecated"] = True
         default = entry["default"]
         if isinstance(default, Path):
             entry["default"] = str(default)
@@ -84,11 +88,7 @@ def describe(parser: argparse.ArgumentParser) -> tuple[list[str], dict]:
 
 
 def documented(command: dict) -> tuple[list[str], dict]:
-    options = {
-        name: {k: v for k, v in spec.items() if k != "deprecated"}
-        for name, spec in command["options"].items()
-    }
-    return command["positionals"], options
+    return command["positionals"], command["options"]
 
 
 def run(func, argv):
