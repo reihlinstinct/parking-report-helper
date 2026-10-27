@@ -15,6 +15,7 @@ import re
 import tomllib
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from importlib import metadata
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -33,7 +34,9 @@ def load_contract(text: str | None = None) -> dict:
         re.DOTALL,
     )
     if not match:
-        raise AssertionError("cli-contract JSON block missing from docs/CLI-CONTRACT.md")
+        raise AssertionError(
+            "cli-contract JSON block missing from docs/CLI-CONTRACT.md"
+        )
     return json.loads(match.group(1))
 
 
@@ -103,28 +106,50 @@ class ContractDocTest(unittest.TestCase):
     def setUp(self) -> None:
         self.contract = load_contract()
 
-    def test_entry_points_and_version_match_pyproject(self) -> None:
-        project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-        self.assertEqual(self.contract["package_version"], project["version"])
-        modules = {name: spec["module"] for name, spec in self.contract["commands"].items()}
-        self.assertEqual(modules, project["scripts"])
+    def test_entry_points_and_version_match_package(self) -> None:
+        # Source checkout: pyproject.toml. Docker test stage (no pyproject in
+        # /app): the installed distribution's metadata, built from that file.
+        pyproject = ROOT / "pyproject.toml"
+        if pyproject.exists():
+            project = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]
+            version, scripts = project["version"], project["scripts"]
+        else:
+            version = metadata.version("parking-report-helper")
+            scripts = {
+                ep.name: ep.value
+                for ep in metadata.distribution("parking-report-helper").entry_points
+                if ep.group == "console_scripts"
+            }
+        self.assertEqual(self.contract["package_version"], version)
+        modules = {
+            name: spec["module"] for name, spec in self.contract["commands"].items()
+        }
+        self.assertEqual(modules, scripts)
 
     def test_parking_report_options_match_parser(self) -> None:
         self.assertEqual(
-            describe(cli.build_parser()), documented(self.contract["commands"]["parking-report"])
+            describe(cli.build_parser()),
+            documented(self.contract["commands"]["parking-report"]),
         )
 
     def test_parking_report_106_options_match_parser(self) -> None:
         self.assertEqual(
-            describe(api_cli_parser()), documented(self.contract["commands"]["parking-report-106"])
+            describe(api_cli_parser()),
+            documented(self.contract["commands"]["parking-report-106"]),
         )
 
     def test_planted_doc_drift_is_detected(self) -> None:
         text = DOC.read_text(encoding="utf-8")
         for old, new in (
             ('"--city": {"default": ""}', '"--city": {"default": "x"}'),
-            ('"--state-dir": {"default": ".106-state"}', '"--state-dir": {"default": "state"}'),
-            ('        "--json": {"default": false, "flag": true}\n', '        "--json": {"default": false}\n'),
+            (
+                '"--state-dir": {"default": ".106-state"}',
+                '"--state-dir": {"default": "state"}',
+            ),
+            (
+                '        "--json": {"default": false, "flag": true}\n',
+                '        "--json": {"default": false}\n',
+            ),
         ):
             self.assertIn(old, text)
             drifted = load_contract(text.replace(old, new, 1))
@@ -160,7 +185,9 @@ class ExitCodeTest(unittest.TestCase):
         self.assertEqual(set(spec["exit_codes"]), {"0", "2", "4"})
         self.assertEqual(run(api_cli.main, [])[0], 2)
         with TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True):
-            code, out, err = run(api_cli.main, [tmp, "--addresses", str(Path(tmp) / "a.json")])
+            code, out, err = run(
+                api_cli.main, [tmp, "--addresses", str(Path(tmp) / "a.json")]
+            )
         self.assertEqual(code, 4)
         line = json.loads(out)
         self.assertEqual(sorted(line), sorted(spec["stdout_keys"]["blocked"]))
@@ -181,7 +208,9 @@ class ExitCodeTest(unittest.TestCase):
                 http_service.main()
             server.assert_not_called()
             message = str(raised.exception.code)
-            self.assertIsInstance(raised.exception.code, str)  # str code -> exit status 1
+            self.assertIsInstance(
+                raised.exception.code, str
+            )  # str code -> exit status 1
             self.assertNotIn("x" * 32, message)
             self.assertNotIn("70000", message)
 
