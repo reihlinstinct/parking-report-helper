@@ -183,7 +183,8 @@ def street_names(street: Any) -> Any:
     if not isinstance(extra, list) or not all(isinstance(a, str) for a in extra):
         raise InputError("Street aliases must be a list of strings.")
     names.extend(extra)
-    return [name for name in names if name]
+    # A spelling that normalizes to nothing must not enter the alias index.
+    return [name for name in names if name and normalize(name)]
 
 
 class Addresses:
