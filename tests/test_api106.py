@@ -161,11 +161,6 @@ class ProtocolTests(unittest.TestCase):
             self.assertNotIn("fake-code", out.stdout)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-@unittest.skipIf(api106 is None, "install the api extra")
 class HebrewFinalLetterTests(unittest.TestCase):
     """Regression for #137: final-letter spelling variants must alias."""
 
@@ -237,3 +232,10 @@ class HebrewFinalLetterTests(unittest.TestCase):
             )
         with self.assertRaises(api106.InputError):
             addr.resolve("רחוב הלך", "1", (31.77, 35.21))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+@unittest.skipIf(api106 is None, "install the api extra")
