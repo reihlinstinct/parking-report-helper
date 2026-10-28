@@ -53,8 +53,10 @@ flowchart LR
 5. **Filing through the 106 API.** A private deployment runs this code for login,
    contact registration, case creation and photo upload. Runner location and
    network transport are deployment-specific; GitHub Actions with a VPN is one
-   supported deployment, not an engine requirement. The caller must enforce the
-   approval and single-use guards. **No municipal request is ever retried**, so a
+   supported deployment, not an engine requirement. The engine enforces private
+   live enablement, the exact approved digest and a durable single-use ledger;
+   the caller's workflow adds review and approval gates around those checks.
+   **No municipal request is ever retried**, so a
    timeout cannot create a duplicate case. Each live attempt is approved per
    report: the exact text, photo, address and subject are reviewed, bound to a
    digest and consumed once. See [docs/API106.md](docs/API106.md).
