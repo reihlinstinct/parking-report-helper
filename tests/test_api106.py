@@ -163,3 +163,69 @@ class ProtocolTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+@unittest.skipIf(api106 is None, "install the api extra")
+class StreetAliasTests(unittest.TestCase):
+    """Regression for #139: dataset aliases cover transliteration variants."""
+
+    def _addresses(self, streets):
+        data = {"version": 1, "streets": streets, "addresses": []}
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        with tmp:
+            json.dump(data, tmp, ensure_ascii=False)
+        self.addCleanup(Path(tmp.name).unlink)
+        return api106.Addresses(Path(tmp.name))
+
+    def test_alias_resolves_to_owning_street(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "838",
+                    "StreetName": "מבוא חביבה רייק",
+                    "CityName": "ירושלים",
+                    "aliases": ["מבוא חביבה רייך"],
+                }
+            ]
+        )
+        resolved = addr.resolve("מבוא חביבה רייך", "1", (31.766717, 35.209297))
+        self.assertEqual(resolved["street_code"], "838")
+        self.assertEqual(resolved["street_name"], "מבוא חביבה רייק")
+
+    def test_alias_collision_stays_fail_closed(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב הרצל",
+                    "CityName": "ירושלים",
+                    "aliases": ["רחוב וולפסון"],
+                },
+                {"StreetCode": "2", "StreetName": "רחוב וולפסון", "CityName": "ירושלים"},
+            ]
+        )
+        with self.assertRaises(api106.InputError):
+            addr.resolve("רחוב וולפסון", "1", (31.766717, 35.209297))
+
+    def test_dataset_without_aliases_is_unchanged(self):
+        addr = self._addresses(
+            [{"StreetCode": "1", "StreetName": "רחוב הרצל", "CityName": "ירושלים"}]
+        )
+        resolved = addr.resolve("רחוב הרצל", "1", (31.766717, 35.209297))
+        self.assertEqual(resolved["street_code"], "1")
+
+    def test_non_string_or_non_list_aliases_rejected(self):
+        for bad in ("רחוב הרצל", [7], {}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(api106.InputError):
+                    self._addresses(
+                        [
+                            {
+                                "StreetCode": "1",
+                                "StreetName": "רחוב הרצל",
+                                "CityName": "ירושלים",
+                                "aliases": bad,
+                            }
+                        ]
+                    )
+
