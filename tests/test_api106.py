@@ -161,8 +161,6 @@ class ProtocolTests(unittest.TestCase):
             self.assertNotIn("fake-code", out.stdout)
 
 
-if __name__ == "__main__":
-    unittest.main()
 @unittest.skipIf(api106 is None, "install the api extra")
 class StreetAliasTests(unittest.TestCase):
     """Regression for #139: dataset aliases cover transliteration variants."""
@@ -229,3 +227,47 @@ class StreetAliasTests(unittest.TestCase):
                         ]
                     )
 
+    def test_alias_normalizing_to_empty_is_ignored(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב הרצל",
+                    "CityName": "ירושלים",
+                    "aliases": ["!!!"],
+                }
+            ]
+        )
+        resolved = addr.resolve("רחוב הרצל", "1", (31.77, 35.21))
+        self.assertEqual(resolved["street_code"], "1")
+        with self.assertRaises(api106.InputError):
+            addr.resolve("!!!", "1", (31.77, 35.21))
+
+    def test_house_point_with_ambiguous_street_gets_no_code(self):
+        data = {
+            "version": 1,
+            "streets": [
+                {"StreetCode": "1", "StreetName": "רחוב וולפסון", "CityName": "ירושלים"},
+                {
+                    "StreetCode": "2",
+                    "StreetName": "רחוב אחר",
+                    "CityName": "ירושלים",
+                    "aliases": ["רחוב וולפסון"],
+                },
+            ],
+            "addresses": [[31.77, 35.21, "5", "רחוב וולפסון"]],
+        }
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        with tmp:
+            json.dump(data, tmp, ensure_ascii=False)
+        self.addCleanup(Path(tmp.name).unlink)
+        addr = api106.Addresses(Path(tmp.name))
+        self.assertEqual(len(addr.points), 1)
+        self.assertIsNone(addr.points[0][3])
+
+
+
+if __name__ == "__main__":
+    unittest.main()
