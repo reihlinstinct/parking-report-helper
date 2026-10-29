@@ -200,7 +200,11 @@ class StreetAliasTests(unittest.TestCase):
                     "CityName": "ירושלים",
                     "aliases": ["רחוב וולפסון"],
                 },
-                {"StreetCode": "2", "StreetName": "רחוב וולפסון", "CityName": "ירושלים"},
+                {
+                    "StreetCode": "2",
+                    "StreetName": "רחוב וולפסון",
+                    "CityName": "ירושלים",
+                },
             ]
         )
         with self.assertRaises(api106.InputError):
@@ -248,7 +252,11 @@ class StreetAliasTests(unittest.TestCase):
         data = {
             "version": 1,
             "streets": [
-                {"StreetCode": "1", "StreetName": "רחוב וולפסון", "CityName": "ירושלים"},
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב וולפסון",
+                    "CityName": "ירושלים",
+                },
                 {
                     "StreetCode": "2",
                     "StreetName": "רחוב אחר",
@@ -267,7 +275,6 @@ class StreetAliasTests(unittest.TestCase):
         addr = api106.Addresses(Path(tmp.name))
         self.assertEqual(len(addr.points), 1)
         self.assertIsNone(addr.points[0][3])
-
 
 
 if __name__ == "__main__":
