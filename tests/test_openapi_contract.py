@@ -12,11 +12,13 @@ import unittest
 from pathlib import Path
 
 from parking_report.api106 import APIError
+from parking_report import http_service
 from parking_report.http_service import Service
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC_PATH = ROOT / "docs" / "openapi.json"
-SOURCE_PATH = ROOT / "src" / "parking_report" / "http_service.py"
+# The installed module, not src/: the Docker test stage has no src tree.
+SOURCE_PATH = Path(http_service.__file__)
 
 TOKEN = "synthetic-only-token-0000000000000000"
 ENV = {
@@ -147,7 +149,9 @@ def call(scenario):
         environ["HTTP_AUTHORIZATION"] = "Bearer " + TOKEN
     environ.update(extra)
     seen = []
-    body = b"".join(app(environ, lambda status, headers: seen.append((status, headers))))
+    body = b"".join(
+        app(environ, lambda status, headers: seen.append((status, headers)))
+    )
     status, headers = seen[0]
     return int(status.split()[0]), dict(headers), json.loads(body)
 
@@ -254,7 +258,10 @@ class OpenAPIContractTests(unittest.TestCase):
         bad = [
             ("Health", {"status": "healthy", "submission_enabled": True}),
             ("Health", {"status": "healthy"}),
-            ("LoginOk", {"status": "login_ok", "submission_enabled": False, "token": "x"}),
+            (
+                "LoginOk",
+                {"status": "login_ok", "submission_enabled": False, "token": "x"},
+            ),
             ("LoginFailed", {"status": "login_failed", "diagnostic": "server text"}),
         ]
         for name, body in bad:
