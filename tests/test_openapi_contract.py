@@ -11,8 +11,8 @@ import json
 import unittest
 from pathlib import Path
 
-from parking_report.api106 import APIError
 from parking_report import http_service
+from parking_report.api106 import APIError
 from parking_report.http_service import Service
 
 ROOT = Path(__file__).resolve().parents[1]
