@@ -40,7 +40,6 @@ class RegistryTests(unittest.TestCase):
             lookup("abc", date(2026, 10, 8))
 
 
-
 class DescribeTests(unittest.TestCase):
     base: ClassVar[dict[str, str]] = {"plate": "1234567", "checked_on": "2026-10-08"}
 

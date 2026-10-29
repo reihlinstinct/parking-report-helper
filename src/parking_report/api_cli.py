@@ -109,7 +109,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
     try:
-
         contact, report, jpeg, digest = prepare(
             args.folder, args.addresses, private_values(os.environ)
         )
@@ -136,7 +135,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             '{"status":"blocked","note":"Check private input and ledger; no automatic retry."}'
         )
         return 4
-
 
 
 DUPLICATE_CHECK_DELAY_SECONDS = 20
