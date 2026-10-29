@@ -5,7 +5,8 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    # Weekly full suite: Sunday 06:00 Israel time (04:00 UTC, winter offset).
+    # Weekly full suite: Sunday 06:00 Israel winter time (04:00 UTC;
+    # runs 07:00 IDT in summer).
     - cron: '0 4 * * 0'
 
 permissions:
