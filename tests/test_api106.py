@@ -189,7 +189,7 @@ class HebrewFinalLetterTests(unittest.TestCase):
     def test_nfkc_runs_before_folding(self):
         # U+FB26 HEBREW LETTER WIDE FINAL MEM: NFKC maps it to final mem,
         # which the fold then maps to regular mem.
-        self.assertEqual(api106.normalize("\uFB26"), "מ")
+        self.assertEqual(api106.normalize("\ufb26"), "מ")
 
     def test_qof_and_kaf_stay_distinct(self):
         self.assertNotEqual(api106.normalize("רייך"), api106.normalize("רייק"))
@@ -210,32 +210,31 @@ class HebrewFinalLetterTests(unittest.TestCase):
 
     def test_resolve_accepts_final_letter_variant(self):
         addr = self._addresses(
-                [
-                    {
-                        "StreetCode": "99999",
-                        "StreetName": "רחוב משה ברוך",
-                        "CityName": "ירושלים",
-                        "CityCode": "3000",
-                    }
-                ],
-                [],
-            )
+            [
+                {
+                    "StreetCode": "99999",
+                    "StreetName": "רחוב משה ברוך",
+                    "CityName": "ירושלים",
+                    "CityCode": "3000",
+                }
+            ],
+            [],
+        )
         resolved = addr.resolve("רחוב משה ברוכ", "1", (31.77, 35.21))
         self.assertEqual(resolved["street_code"], "99999")
         self.assertEqual(resolved["street_name"], "רחוב משה ברוך")
 
     def test_final_letter_ambiguity_stays_fail_closed(self):
         addr = self._addresses(
-                [
-                    {"StreetCode": "1", "StreetName": "רחוב הלך", "CityName": "ירושלים"},
-                    {"StreetCode": "2", "StreetName": "רחוב הלכ", "CityName": "ירושלים"},
-                ],
-                [],
-            )
+            [
+                {"StreetCode": "1", "StreetName": "רחוב הלך", "CityName": "ירושלים"},
+                {"StreetCode": "2", "StreetName": "רחוב הלכ", "CityName": "ירושלים"},
+            ],
+            [],
+        )
         with self.assertRaises(api106.InputError):
             addr.resolve("רחוב הלך", "1", (31.77, 35.21))
 
 
 if __name__ == "__main__":
     unittest.main()
-
