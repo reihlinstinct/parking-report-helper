@@ -227,10 +227,7 @@ class Addresses:
             ]
             if gps_xy:
                 (x, y) = gps_xy
-                if (
-                    points
-                    and min(math.hypot(p[0] - x, p[1] - y) for p in points) > 200
-                ):
+                if points and min(math.hypot(p[0] - x, p[1] - y) for p in points) > 200:
                     raise InputError(
                         "The supplied address is more than 200 m from the photo GPS. Check the address."
                     )
@@ -273,10 +270,8 @@ class Addresses:
                 or (len(nearby) > 1 and nearby[1][0] - nearby[0][0] < 8)
             ):
                 choices = "; ".join(
-
-                        f"{(self.streets[c]['StreetName'] if c else name)} {h} ({d:.0f} m)"
-                        for (d, h, c, name) in nearby
-
+                    f"{(self.streets[c]['StreetName'] if c else name)} {h} ({d:.0f} m)"
+                    for (d, h, c, name) in nearby
                 )
                 raise InputError(
                     "GPS does not identify one clear address. Supply --address. Nearby: "
@@ -527,6 +522,27 @@ class Municipality:
                 "fileContent": base64.b64encode(jpeg).decode("ascii"),
             },
         )
+
+
+def duplicate_case_numbers(incidents: Any, description: str) -> Any:
+    """Case numbers whose description matches the submitted text exactly (#160).
+
+    The municipality has created two CRM cases from a single CreateCase POST,
+    seconds apart. Detection compares the exact submitted text only; case
+    numbers are safe to log, descriptions are not.
+    """
+    if not isinstance(description, str) or not description:
+        raise InputError("Supply the exact submitted description.")
+    numbers = []
+    for incident in incidents if isinstance(incidents, list) else []:
+        if not isinstance(incident, dict):
+            continue
+        if incident.get("description") != description:
+            continue
+        number = incident.get("case_number")
+        if isinstance(number, str) and number:
+            numbers.append(number)
+    return sorted(numbers)
 
 
 def save_state(path: Any, state: Any) -> Any:
