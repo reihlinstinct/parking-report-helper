@@ -163,6 +163,7 @@ class SubmitDuplicateExitTests(unittest.TestCase):
             code, payload, check = run_submit(folder, addresses, ["2610-9222943"])
         self.assertEqual(code, 0)
         self.assertEqual(payload["duplicate_check"], "single")
+        self.assertEqual(payload["duplicate_case_numbers"], [])
 
     def test_unavailable_verification_never_fails_the_submission(self):
         with TemporaryDirectory() as tmp:
@@ -201,7 +202,9 @@ class SubmitDuplicateExitTests(unittest.TestCase):
                     ]
                 )
         self.assertEqual(code, 0)
-        self.assertNotIn("duplicate_check", json.loads(out.getvalue()))
+        line = json.loads(out.getvalue())
+        self.assertEqual(line["duplicate_check"], "skipped")
+        self.assertEqual(line["duplicate_case_numbers"], [])
         check.assert_not_called()
 
 

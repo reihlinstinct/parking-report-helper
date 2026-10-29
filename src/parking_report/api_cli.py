@@ -9,7 +9,8 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
-from datetime import date
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -161,7 +162,8 @@ def post_submit_duplicate_check(
 
     sleep(DUPLICATE_CHECK_DELAY_SECONDS)
     if today is None:
-        today = date.today().isoformat()
+        # The municipal day boundary is the reporter's, not the server's.
+        today = datetime.now(ZoneInfo("Asia/Jerusalem")).date().isoformat()
     try:
         token = api.login()
         incidents = api.list_cases(token, reporter, from_date=today).get(
@@ -247,6 +249,8 @@ def execute(
         "photo_attached": result["photo_attached"],
     }
     exit_code = 0
+    output["duplicate_check"] = "skipped"
+    output["duplicate_case_numbers"] = []
     description = report.get("CaseDescription")
     if result["status"] == "submitted" and isinstance(description, str) and description:
         numbers = post_submit_duplicate_check(
