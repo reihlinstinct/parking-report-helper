@@ -1,7 +1,7 @@
 # Decision record: HTTP service scope
 
 - **Issue:** #72
-- **Status:** Proposed. The default below applies until Reihl decides otherwise on #72.
+- **Status:** Decided by Reihl on 2026-10-29: option A (keep the default).
 - **Date:** 2026-10-29
 
 ## Context
@@ -36,7 +36,7 @@ read-only case-status proxy, on Render or on another host?
 - The private Git-backed ledger and the CLI already cover status lookups
   (`docs/STATUS.md`, `docs/CASE-LISTING.md`) without a network listener.
 
-## Decision (default)
+## Decision
 
 **No new network surface.**
 
