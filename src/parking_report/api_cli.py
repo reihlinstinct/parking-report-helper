@@ -10,9 +10,9 @@ import time
 from collections.abc import Mapping, Sequence
 from contextlib import nullcontext
 from datetime import datetime
-from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from .intake import record_to_car
 from .report import build_report

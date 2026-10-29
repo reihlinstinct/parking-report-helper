@@ -21,7 +21,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from parking_report import api_cli, api106
+from parking_report import api106, api_cli
 
 ENV = {
     "PARKING_REPORTER_FIRST_NAME": "דנה",
