@@ -3,7 +3,7 @@
 import json
 import unittest
 from tempfile import TemporaryDirectory
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from test_api_cli_main import ENV, make_folder, run
 
@@ -144,9 +144,12 @@ class FollowupTests(unittest.TestCase):
                 if not has_manifest:
                     record.pop("followup")
                     (folder / "report.json").write_text(json.dumps(record))
+                ledger = MagicMock()
+                ledger.locked.return_value.__enter__.return_value = ledger
                 with (
                     self.subTest(normal=normal, followup=followup, enabled=enabled),
-                    patch("parking_report.ledger.GitLedger.reserve") as reserve,
+                    patch("parking_report.ledger.GitLedger", return_value=ledger),
+                    patch.object(api_cli, "execute", return_value=0),
                 ):
                     code, _ = run(
                         [
@@ -164,4 +167,4 @@ class FollowupTests(unittest.TestCase):
                         dict(ENV, PARKING_106_ENABLE_LIVE=enabled),
                     )
                     self.assertEqual(code, 4)
-                    reserve.assert_not_called()
+                    ledger.reserve.assert_not_called()

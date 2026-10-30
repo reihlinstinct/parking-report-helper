@@ -3,11 +3,7 @@
 Flag, default, exit-code and JSON-key changes are recorded here, as required by the
 [flag-stability policy](docs/CLI-CONTRACT.md#flag-stability-policy).
 
-## Unreleased
-
-## 0.4.0
-
-- Add explicit authorized follow-up support (#189); previews leave the ledger unchanged, receipt references are cross-checked when available, and every approval clause has a regression test.
+## Unreleased (planned 0.4.0)
 
 - Add an explicit parent-linked follow-up manifest and `--approved-followup-sha256` gate (#189). Preserve the original photo index and normal duplicate rejection; only one child per completed parent. Caller authority and live closure verification remain required.
 
