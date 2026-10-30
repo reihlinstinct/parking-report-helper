@@ -219,7 +219,7 @@ class LedgerTests(unittest.TestCase):
         with GitLedger(self.a).locked() as ledger:
             ledger.reserve("original", "a" * 64, "b" * 64)
             manifest = self.followup_manifest()
-            for status in ("prepared", "creating", "created"):
+            for status in ("prepared", "creating", "created", "attaching"):
                 ledger.checkpoint("original", {"version": 1, "status": status})
                 with self.assertRaises(LedgerError):
                     ledger.reserve("followup", "c" * 64, "b" * 64, followup=manifest)
@@ -232,3 +232,66 @@ class LedgerTests(unittest.TestCase):
                     ledger.reserve("followup", "c" * 64, "b" * 64, followup=bad)
             with self.assertRaises(LedgerError):
                 ledger.reserve("followup", "c" * 64, "f" * 64, followup=manifest)
+
+    def test_followup_round_two_and_receipt_reference(self):
+        with GitLedger(self.a).locked() as ledger:
+            ledger.reserve("original", "a" * 64, "b" * 64)
+            ledger.checkpoint(
+                "original",
+                {
+                    "version": 1,
+                    "status": "complete",
+                    "case": {"CaseNumberInCRM": "2601-1234567"},
+                },
+            )
+            with self.assertRaises(LedgerError):
+                ledger.reserve(
+                    "child",
+                    "c" * 64,
+                    "b" * 64,
+                    followup=dict(
+                        self.followup_manifest(), parent_case_number="2601-9"
+                    ),
+                )
+            ledger.reserve(
+                "child", "c" * 64, "b" * 64, followup=self.followup_manifest()
+            )
+            ledger.checkpoint("child", {"version": 1, "status": "complete"})
+            with self.assertRaises(LedgerError):
+                ledger.reserve(
+                    "round-two", "d" * 64, "b" * 64, followup=self.followup_manifest()
+                )
+            second = dict(
+                self.followup_manifest("child"),
+                parent_digest="c" * 64,
+                parent_case_number="2601-1234568",
+                approval_reference="approval-2",
+            )
+            ledger.reserve("round-two", "d" * 64, "b" * 64, followup=second)
+
+    def test_followup_preview_leaves_real_git_ledger_unchanged(self):
+        from test_api_cli_main import make_folder, run
+
+        from parking_report.api106 import read_picture
+
+        folder = self.root / "preview"
+        folder.mkdir()
+        folder, addresses = make_folder(folder)
+        photo_hash, _, _ = read_picture(folder / "photo.jpg")
+        with GitLedger(self.a).locked() as ledger:
+            ledger.reserve("original", "a" * 64, photo_hash)
+            ledger.checkpoint("original", {"version": 1, "status": "complete"})
+        before_bytes = (self.a / "ledger.json").read_bytes()
+        before_remote = self.git(self.a, "ls-remote", "origin", "refs/heads/106-ledger")
+        record = json.loads((folder / "report.json").read_text())
+        record["followup"] = self.followup_manifest()
+        (folder / "report.json").write_text(json.dumps(record))
+        code, _ = run(
+            [str(folder), "--addresses", str(addresses), "--ledger-dir", str(self.a)]
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual((self.a / "ledger.json").read_bytes(), before_bytes)
+        self.assertEqual(
+            self.git(self.a, "ls-remote", "origin", "refs/heads/106-ledger"),
+            before_remote,
+        )

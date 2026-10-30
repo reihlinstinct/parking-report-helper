@@ -126,3 +126,42 @@ class FollowupTests(unittest.TestCase):
                 _, output = run([str(folder), "--addresses", str(addresses)])
                 digests.append(json.loads(output)["sha256"])
             self.assertNotEqual(*digests)
+
+    def test_every_approval_clause_blocks_before_reservation(self):
+        with TemporaryDirectory() as tmp:
+            folder, addresses = make_folder(tmp)
+            record = json.loads((folder / "report.json").read_text())
+            record["followup"] = manifest()
+            (folder / "report.json").write_text(json.dumps(record))
+            _, output = run([str(folder), "--addresses", str(addresses)])
+            digest = json.loads(output)["sha256"]
+            for normal, followup, enabled, has_manifest in (
+                (digest, "wrong", "true", True),
+                ("wrong", digest, "true", True),
+                (digest, digest, "false", True),
+                (digest, digest, "true", False),
+            ):
+                if not has_manifest:
+                    record.pop("followup")
+                    (folder / "report.json").write_text(json.dumps(record))
+                with (
+                    self.subTest(normal=normal, followup=followup, enabled=enabled),
+                    patch("parking_report.ledger.GitLedger.reserve") as reserve,
+                ):
+                    code, _ = run(
+                        [
+                            str(folder),
+                            "--addresses",
+                            str(addresses),
+                            "--ledger-dir",
+                            tmp,
+                            "--submit",
+                            "--approved-sha256",
+                            normal,
+                            "--approved-followup-sha256",
+                            followup,
+                        ],
+                        dict(ENV, PARKING_106_ENABLE_LIVE=enabled),
+                    )
+                    self.assertEqual(code, 4)
+                    reserve.assert_not_called()

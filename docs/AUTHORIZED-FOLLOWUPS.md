@@ -10,8 +10,12 @@ private evidence belongs in public fixtures. The entire manifest is bound into
 the normal preview digest. A live follow-up also requires
 `--approved-followup-sha256` equal to that digest, as well as all normal gates.
 
+Follow-up previews never reserve a ledger slot, even with `--ledger-dir`.
+
 The durable ledger requires a completed parent with matching digest and photo.
 It retains the original photo index and adds a parent relation to the child.
+A nonempty case number in the parent receipt must agree with the manifest.
+Legacy receipts with no case number still require caller verification.
 Only one child may reserve a parent; uncertainty blocks siblings. Further rounds
 must explicitly name their immediately completed parent. Reusing a completed
 child returns its receipt. Changed inputs and ordinary duplicate photos remain

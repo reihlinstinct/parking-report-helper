@@ -163,6 +163,9 @@ class GitLedger:
         )
         if actual != expected:
             raise LedgerError("Follow-up needs the completed matching parent")
+        receipt_number = parent.get("state", {}).get("case", {}).get("CaseNumberInCRM")
+        if receipt_number and receipt_number != followup["parent_case_number"]:
+            raise LedgerError("Follow-up case reference conflicts with parent receipt")
         origin = self.data["photos"].get(photo_hash)
         if not origin or origin not in reports:
             raise LedgerError("Follow-up photo index is missing")

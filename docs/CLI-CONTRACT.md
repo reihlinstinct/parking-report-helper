@@ -4,7 +4,7 @@ Issue #73. This file **documents what the three entry points do today**. It
 doesn't change them. `tests/test_cli_contract.py` loads the JSON block below
 and checks it against the real parsers and exit paths. Changing a flag, a
 default or an exit code without updating this file fails CI. The package
-version is `0.3.0`. Changes to this contract follow the
+version is `0.4.0`. Changes to this contract follow the
 [flag-stability policy](#flag-stability-policy).
 
 ## Machine-readable contract
@@ -13,7 +13,7 @@ version is `0.3.0`. Changes to this contract follow the
 ```json
 {
   "contract_version": 0,
-  "package_version": "0.3.0",
+  "package_version": "0.4.0",
   "commands": {
     "parking-report": {
       "module": "parking_report.cli:main",

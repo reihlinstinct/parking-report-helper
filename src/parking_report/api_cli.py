@@ -145,13 +145,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         if args.approved_followup_sha256 and followup is None:
             raise ValueError("Follow-up approval requires a manifest")
-        with ledger.locked() if ledger else nullcontext():
+        # Follow-up previews must not consume the single-child reservation.
+        reserve_ledger = ledger if args.submit or followup is None else None
+        with reserve_ledger.locked() if reserve_ledger else nullcontext():
             entry = None
-            if ledger:
+            if reserve_ledger:
                 entry = (
-                    ledger.reserve(report_id, digest, photo_hash, followup=followup)
+                    reserve_ledger.reserve(
+                        report_id, digest, photo_hash, followup=followup
+                    )
                     if followup is not None
-                    else ledger.reserve(report_id, digest, photo_hash)
+                    else reserve_ledger.reserve(report_id, digest, photo_hash)
                 )
             return execute(
                 args, contact, report, jpeg, digest, ledger, entry, report_id
