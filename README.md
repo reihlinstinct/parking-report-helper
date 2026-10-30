@@ -83,6 +83,10 @@ For the full diagram and responsibilities of both repositories, see
 `docs/ARCHITECTURE.md` in the private `parking-reports` repository (collaborators
 only).
 
+Explicitly approved follow-ups can reuse original evidence only through the
+[parent-linked follow-up gate](docs/AUTHORIZED-FOLLOWUPS.md), never by changing
+photo bytes or deleting duplicate history.
+
 ## Safety rules
 
 - Never auto-submits, never touches a CAPTCHA, never retries a municipal write.
@@ -243,13 +247,18 @@ GitHub Actions runs the suite on Python 3.11 to 3.13 for every push and pull req
 A separate job builds the Docker image, runs the tests inside it, and smoke-tests the
 container. Nothing is published. Workflows use read-only repository permissions and
 need no secrets.
+The `Ruff (lint + format)` job runs `ruff check` and `ruff format --check`;
+it is report-only until the repository variable `RUFF_GATE=on`. See
+[docs/STYLE.md](docs/STYLE.md#lint-and-format-64).
 
 ## Render HTTP connectivity check (diagnostic)
 
 `Dockerfile.render` builds a small authenticated Login-check service that was used
 to test hosting options. It is not the filing route: production filing goes through
 GitHub Actions and the VPN tunnel described above. See
-[docs/HTTP106.md](docs/HTTP106.md).
+[docs/HTTP106.md](docs/HTTP106.md), the OpenAPI contract in
+[docs/openapi.json](docs/openapi.json) and the scope decision in
+[docs/HTTP-SCOPE.md](docs/HTTP-SCOPE.md).
 
 ## Other municipal issues and per-report category selection
 

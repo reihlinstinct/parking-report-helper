@@ -88,7 +88,8 @@ class ProtocolTests(unittest.TestCase):
             patch.dict(os.environ, {"PARKING_STATE_GIT": "1"}),
             patch.object(
                 api106.subprocess, "run", return_value=argparse.Namespace(returncode=1)
-            ),self.assertRaises(api106.ReviewNeeded)
+            ),
+            self.assertRaises(api106.ReviewNeeded),
         ):
             api106.submit(Fake(), {}, {}, b"jpeg", "c" * 64, Path(tmp))
 
@@ -159,6 +160,250 @@ class ProtocolTests(unittest.TestCase):
             )
             self.assertEqual(out.returncode, 4)
             self.assertNotIn("fake-code", out.stdout)
+
+
+@unittest.skipIf(api106 is None, "install the api extra")
+class HebrewFinalLetterTests(unittest.TestCase):
+    """Regression for #137: final-letter spelling variants must alias."""
+
+    def test_normalize_folds_all_five_final_letters(self):
+        for final, regular in zip("ךםןףץ", "כמנפצ"):
+            with self.subTest(pair=(final, regular)):
+                self.assertEqual(
+                    api106.normalize(f"א{final}"), api106.normalize(f"א{regular}")
+                )
+
+    def test_normalize_matches_final_letter_street_variant(self):
+        self.assertEqual(
+            api106.normalize("רחוב משה ברוך"),
+            api106.normalize("רחוב משה ברוכ"),
+        )
+
+    def test_fold_direction_is_final_to_regular(self):
+        self.assertEqual(api106.normalize("אך"), "אכ")
+        self.assertEqual(api106.normalize("אם"), "אמ")
+
+    def test_fold_applies_to_every_occurrence(self):
+        self.assertEqual(api106.normalize("ךכך"), "כככ")
+
+    def test_nfkc_runs_before_folding(self):
+        # U+FB26 HEBREW LETTER WIDE FINAL MEM: NFKC maps it to final mem,
+        # which the fold then maps to regular mem.
+        self.assertEqual(api106.normalize("\ufb26"), "מ")
+
+    def test_qof_and_kaf_stay_distinct(self):
+        self.assertNotEqual(api106.normalize("רייך"), api106.normalize("רייק"))
+
+    def test_nfkc_and_alnum_filter_still_apply(self):
+        self.assertEqual(api106.normalize("ＡＢＣ１２３"), "ABC123")
+        self.assertEqual(api106.normalize("רחוב! הלך?"), "רחובהלכ")
+
+    def _addresses(self, streets, addresses):
+        data = {"version": 1, "streets": streets, "addresses": addresses}
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        with tmp:
+            json.dump(data, tmp, ensure_ascii=False)
+        self.addCleanup(Path(tmp.name).unlink)
+        return api106.Addresses(Path(tmp.name))
+
+    def test_resolve_accepts_final_letter_variant(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "99999",
+                    "StreetName": "רחוב משה ברוך",
+                    "CityName": "ירושלים",
+                    "CityCode": "3000",
+                }
+            ],
+            [],
+        )
+        resolved = addr.resolve("רחוב משה ברוכ", "1", (31.77, 35.21))
+        self.assertEqual(resolved["street_code"], "99999")
+        self.assertEqual(resolved["street_name"], "רחוב משה ברוך")
+
+    def test_final_letter_ambiguity_stays_fail_closed(self):
+        addr = self._addresses(
+            [
+                {"StreetCode": "1", "StreetName": "רחוב הלך", "CityName": "ירושלים"},
+                {"StreetCode": "2", "StreetName": "רחוב הלכ", "CityName": "ירושלים"},
+            ],
+            [],
+        )
+        with self.assertRaises(api106.InputError):
+            addr.resolve("רחוב הלך", "1", (31.77, 35.21))
+
+
+@unittest.skipIf(api106 is None, "install the api extra")
+class StreetAliasTests(unittest.TestCase):
+    """Regression for #139: dataset aliases cover transliteration variants."""
+
+    def _addresses(self, streets):
+        data = {"version": 1, "streets": streets, "addresses": []}
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        with tmp:
+            json.dump(data, tmp, ensure_ascii=False)
+        self.addCleanup(Path(tmp.name).unlink)
+        return api106.Addresses(Path(tmp.name))
+
+    def test_alias_resolves_to_owning_street(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "838",
+                    "StreetName": "מבוא חביבה רייק",
+                    "CityName": "ירושלים",
+                    "aliases": ["מבוא חביבה רייך"],
+                }
+            ]
+        )
+        resolved = addr.resolve("מבוא חביבה רייך", "1", (31.766717, 35.209297))
+        self.assertEqual(resolved["street_code"], "838")
+        self.assertEqual(resolved["street_name"], "מבוא חביבה רייק")
+
+    def test_alias_collision_stays_fail_closed(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב הרצל",
+                    "CityName": "ירושלים",
+                    "aliases": ["רחוב וולפסון"],
+                },
+                {
+                    "StreetCode": "2",
+                    "StreetName": "רחוב וולפסון",
+                    "CityName": "ירושלים",
+                },
+            ]
+        )
+        with self.assertRaises(api106.InputError):
+            addr.resolve("רחוב וולפסון", "1", (31.766717, 35.209297))
+
+    def test_dataset_without_aliases_is_unchanged(self):
+        addr = self._addresses(
+            [{"StreetCode": "1", "StreetName": "רחוב הרצל", "CityName": "ירושלים"}]
+        )
+        resolved = addr.resolve("רחוב הרצל", "1", (31.766717, 35.209297))
+        self.assertEqual(resolved["street_code"], "1")
+
+    def test_non_string_or_non_list_aliases_rejected(self):
+        for bad in ("רחוב הרצל", [7], {}):
+            with self.subTest(bad=bad):
+                with self.assertRaises(api106.InputError):
+                    self._addresses(
+                        [
+                            {
+                                "StreetCode": "1",
+                                "StreetName": "רחוב הרצל",
+                                "CityName": "ירושלים",
+                                "aliases": bad,
+                            }
+                        ]
+                    )
+
+    def test_alias_normalizing_to_empty_is_ignored(self):
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב הרצל",
+                    "CityName": "ירושלים",
+                    "aliases": ["!!!"],
+                }
+            ]
+        )
+        resolved = addr.resolve("רחוב הרצל", "1", (31.77, 35.21))
+        self.assertEqual(resolved["street_code"], "1")
+        with self.assertRaises(api106.InputError):
+            addr.resolve("!!!", "1", (31.77, 35.21))
+
+    def test_house_point_with_ambiguous_street_gets_no_code(self):
+        data = {
+            "version": 1,
+            "streets": [
+                {
+                    "StreetCode": "1",
+                    "StreetName": "רחוב וולפסון",
+                    "CityName": "ירושלים",
+                },
+                {
+                    "StreetCode": "2",
+                    "StreetName": "רחוב אחר",
+                    "CityName": "ירושלים",
+                    "aliases": ["רחוב וולפסון"],
+                },
+            ],
+            "addresses": [[31.77, 35.21, "5", "רחוב וולפסון"]],
+        }
+        tmp = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        with tmp:
+            json.dump(data, tmp, ensure_ascii=False)
+        self.addCleanup(Path(tmp.name).unlink)
+        addr = api106.Addresses(Path(tmp.name))
+        self.assertEqual(len(addr.points), 1)
+        self.assertIsNone(addr.points[0][3])
+
+    def test_arabic_name_resolves_to_its_street(self):
+        # #144: street_names() feeds StreetArabicName into the alias index.
+        addr = self._addresses(
+            [
+                {
+                    "StreetCode": "7",
+                    "StreetName": "רחוב הניסוי",
+                    "StreetArabicName": "شارع التجربة",
+                    "CityName": "ירושלים",
+                },
+                {"StreetCode": "8", "StreetName": "רחוב אחר", "CityName": "ירושלים"},
+            ]
+        )
+        resolved = addr.resolve("شارع التجربة", "1", (31.77, 35.21))
+        self.assertEqual(resolved["street_code"], "7")
+        # The report always carries the official Hebrew name.
+        self.assertEqual(resolved["street_name"], "רחוב הניסוי")
+
+    def test_arabic_name_collision_stays_fail_closed(self):
+        # #144: an Arabic spelling shared with another street matches no
+        # single StreetCode, so resolve() must reject it.
+        cases = {
+            "other_arabic_name": {
+                "StreetCode": "8",
+                "StreetName": "רחוב אחר",
+                "StreetArabicName": "شارع التجربة",
+                "CityName": "ירושלים",
+            },
+            "other_alias": {
+                "StreetCode": "8",
+                "StreetName": "רחוב אחר",
+                "CityName": "ירושלים",
+                "aliases": ["شارع التجربة"],
+            },
+        }
+        for label, other in cases.items():
+            with self.subTest(collides_with=label):
+                addr = self._addresses(
+                    [
+                        {
+                            "StreetCode": "7",
+                            "StreetName": "רחוב הניסוי",
+                            "StreetArabicName": "شارع التجربة",
+                            "CityName": "ירושלים",
+                        },
+                        other,
+                    ]
+                )
+                with self.assertRaises(api106.InputError):
+                    addr.resolve("شارع التجربة", "1", (31.77, 35.21))
+                # Each street's own Hebrew name still resolves.
+                self.assertEqual(
+                    addr.resolve("רחוב אחר", "1", (31.77, 35.21))["street_code"], "8"
+                )
 
 
 if __name__ == "__main__":

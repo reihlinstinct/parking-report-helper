@@ -51,8 +51,15 @@ def json_file(path: Any) -> Any:
         raise InputError(f"Cannot read valid UTF-8 JSON from {path}.") from exc
 
 
+# Hebrew final letters (ךםןףץ) have no NFKC mapping to their regular forms,
+# so they are folded explicitly (#137). Both the alias index and every lookup
+# pass through normalize(), which keeps matches fail-closed on ambiguity.
+_HEBREW_FINALS = str.maketrans("ךםןףץ", "כמנפצ")
+
+
 def normalize(text: Any) -> Any:
-    return "".join(c for c in unicodedata.normalize("NFKC", text) if c.isalnum())
+    folded = unicodedata.normalize("NFKC", text).translate(_HEBREW_FINALS)
+    return "".join(c for c in folded if c.isalnum())
 
 
 def check_text(value: Any, label: Any) -> Any:
@@ -174,6 +181,19 @@ def in_jerusalem(lat: Any, lon: Any) -> Any:
     return 31.65 <= lat <= 31.95 and 35.05 <= lon <= 35.35
 
 
+def street_names(street: Any) -> Any:
+    """All accepted spellings of one street: official names plus optional aliases."""
+    names = [street.get(key) for key in ("StreetName", "StreetArabicName")]
+    extra = street.get("aliases")
+    if extra is None:
+        extra = []
+    if not isinstance(extra, list) or not all(isinstance(a, str) for a in extra):
+        raise InputError("Street aliases must be a list of strings.")
+    names.extend(extra)
+    # A spelling that normalizes to nothing must not enter the alias index.
+    return [name for name in names if name and normalize(name)]
+
+
 class Addresses:
     def __init__(self, path: Any) -> None:
         data = json_file(path)
@@ -182,9 +202,8 @@ class Addresses:
         self.streets = {str(s["StreetCode"]): s for s in data["streets"]}
         self.aliases: dict[str, set[str]] = {}
         for code, street in self.streets.items():
-            for key in ("StreetName", "StreetArabicName"):
-                if street.get(key):
-                    self.aliases.setdefault(normalize(street[key]), set()).add(code)
+            for name in street_names(street):
+                self.aliases.setdefault(normalize(name), set()).add(code)
         self.points = []
         for lat, lon, house, name in data["addresses"]:
             codes = self.aliases.get(normalize(name), set())
@@ -215,10 +234,7 @@ class Addresses:
             ]
             if gps_xy:
                 (x, y) = gps_xy
-                if (
-                    points
-                    and min(math.hypot(p[0] - x, p[1] - y) for p in points) > 200
-                ):
+                if points and min(math.hypot(p[0] - x, p[1] - y) for p in points) > 200:
                     raise InputError(
                         "The supplied address is more than 200 m from the photo GPS. Check the address."
                     )
@@ -261,10 +277,8 @@ class Addresses:
                 or (len(nearby) > 1 and nearby[1][0] - nearby[0][0] < 8)
             ):
                 choices = "; ".join(
-
-                        f"{(self.streets[c]['StreetName'] if c else name)} {h} ({d:.0f} m)"
-                        for (d, h, c, name) in nearby
-
+                    f"{(self.streets[c]['StreetName'] if c else name)} {h} ({d:.0f} m)"
+                    for (d, h, c, name) in nearby
                 )
                 raise InputError(
                     "GPS does not identify one clear address. Supply --address. Nearby: "
@@ -515,6 +529,27 @@ class Municipality:
                 "fileContent": base64.b64encode(jpeg).decode("ascii"),
             },
         )
+
+
+def duplicate_case_numbers(incidents: Any, description: str) -> Any:
+    """Case numbers whose description matches the submitted text exactly (#160).
+
+    The municipality has created two CRM cases from a single CreateCase POST,
+    seconds apart. Detection compares the exact submitted text only; case
+    numbers are safe to log, descriptions are not.
+    """
+    if not isinstance(description, str) or not description:
+        raise InputError("Supply the exact submitted description.")
+    numbers = []
+    for incident in incidents if isinstance(incidents, list) else []:
+        if not isinstance(incident, dict):
+            continue
+        if incident.get("description") != description:
+            continue
+        number = incident.get("case_number")
+        if isinstance(number, str) and number:
+            numbers.append(number)
+    return sorted(numbers)
 
 
 def save_state(path: Any, state: Any) -> Any:
