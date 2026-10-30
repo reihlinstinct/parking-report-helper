@@ -41,6 +41,7 @@ version is `0.3.0`. Changes to this contract follow the
         "--ledger-dir": {"default": null},
         "--submit": {"default": false, "flag": true},
         "--approved-sha256": {"default": ""},
+        "--approved-followup-sha256": {"default": ""},
         "--retry-photo": {"default": false, "flag": true},
         "--approved-category-routing": {"default": "", "choices": ["crosswalk_parking", "blocked_ramp"], "deprecated": true}
       },
