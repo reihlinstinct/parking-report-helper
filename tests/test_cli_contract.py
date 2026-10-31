@@ -211,7 +211,7 @@ class ExitCodeTest(unittest.TestCase):
 
     def test_parking_report_http_invalid_config_exits_with_fixed_message(self) -> None:
         spec = self.contract["parking-report-http"]
-        self.assertEqual(set(spec["exit_codes"]), {"1"})
+        self.assertEqual(set(spec["exit_codes"]), {"0", "1"})
         cases = ({}, {"PARKING_HTTP_TOKEN": "x" * 32, "PORT": "70000"})
         for env in cases:
             with (
@@ -228,7 +228,9 @@ class ExitCodeTest(unittest.TestCase):
 
     def test_parking_report_http_ignores_extra_argv(self) -> None:
         spec = self.contract["parking-report-http"]
-        self.assertEqual(spec["argv"], "ignored (not parsed, not rejected)")
+        self.assertEqual(
+            spec["argv"], "ignored (not parsed, not rejected), except -h/--help"
+        )
         env = {"PARKING_HTTP_TOKEN": "z" * 32, "PORT": "10001"}
         argv = ["parking-report-http", "--no-such-flag", "extra"]
         with (
