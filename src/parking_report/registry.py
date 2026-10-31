@@ -123,14 +123,11 @@ def _vehicle_sentences(result: dict[str, Any]) -> list[str]:
     if vehicle.get("kinuy_mishari"):
         name += f" ({str(vehicle['kinuy_mishari']).strip()})"
     if name:
-        parts.append(
-            f"רכב מסוג {name}"
-            + (
-                f", צבע {str(vehicle['tzeva_rechev']).strip()}."
-                if vehicle.get("tzeva_rechev")
-                else "."
-            )
+        colour = (
+            str(vehicle["tzeva_rechev"]).strip() if vehicle.get("tzeva_rechev") else ""
         )
+        # A colour that strips to empty is omitted, not shown as "צבע ." (#199).
+        parts.append(f"רכב מסוג {name}" + (f", צבע {colour}." if colour else "."))
     parts.append(_licence_sentence(vehicle, result.get("licence_status")))
     test = _he_date(vehicle.get("mivchan_acharon_dt"))
     if test:
@@ -159,8 +156,9 @@ def _disability_sentence(result: dict[str, Any]) -> str | None:
     tag: dict[str, Any] = tag_raw if isinstance(tag_raw, dict) else {}
     text = "לרכב רשום תג נכה במאגר תגי הנכים"
     kind = tag.get("SUG TAV")
-    if kind not in (None, ""):
-        text += f" (קוד סוג תג: {str(kind).strip()})"
+    kind_text = "" if kind in (None, "") else str(kind).strip()
+    if kind_text:  # numeric 0 stays ("0"); whitespace-only is omitted (#199)
+        text += f" (קוד סוג תג: {kind_text})"
     issued = _he_date(tag.get("TAARICH HAFAKAT TAG"))
     if issued:
         text += f", הונפק ב-{issued}"
