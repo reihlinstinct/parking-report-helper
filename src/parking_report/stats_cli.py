@@ -65,7 +65,7 @@ def run(argv: list[str]) -> int:
         print(f"{PROG}: {exc}", file=sys.stderr)
         return 1
     summary = summarize(incidents, top_streets=args.top_streets)
-    summary["inputs"] = [str(Path(p)) for p in args.inputs]
+    summary["inputs"] = [Path(p).name for p in args.inputs]
     summary["duplicates_skipped"] = duplicates
 
     out_dir = Path(args.output)

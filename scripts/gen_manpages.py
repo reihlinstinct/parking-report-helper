@@ -438,9 +438,7 @@ def render_page(
                 extra = _default_note(spec_opt, text)
                 body = " ".join(x for x in (text, extra) if x)
                 lines += [".TP", _option_label(action), para(body)]
-            sub_positionals = [
-                a for a in _visible(sub_parser) if not a.option_strings
-            ]
+            sub_positionals = [a for a in _visible(sub_parser) if not a.option_strings]
             for action in sub_positionals:
                 label = esc(str(action.metavar or action.dest))
                 text = _sentence(_help(action))

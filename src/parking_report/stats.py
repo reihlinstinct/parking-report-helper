@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import math
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -111,9 +112,10 @@ def _count(items: Iterable[str]) -> dict[str, int]:
 
 
 def _quantile(sorted_values: list[float], fraction: float) -> float:
+    """Nearest-rank: value at index ceil(fraction * n) - 1."""
     if not sorted_values:
         return 0.0
-    index = min(len(sorted_values) - 1, int(fraction * len(sorted_values)))
+    index = max(0, math.ceil(fraction * len(sorted_values)) - 1)
     return sorted_values[index]
 
 
@@ -232,7 +234,7 @@ def summarize(
                 category: round(_quantile(sorted(values), 0.5), 3)
                 for category, values in sorted(
                     closure_by_category.items(),
-                    key=lambda kv: -len(kv[1]),
+                    key=lambda kv: (-len(kv[1]), kv[0]),
                 )
             },
         },

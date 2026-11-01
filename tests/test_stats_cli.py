@@ -31,6 +31,7 @@ class BuildCommandTest(unittest.TestCase):
             self.assertEqual(summary["total_incidents"], 13)
             self.assertEqual(summary["duplicates_skipped"], 1)
             self.assertEqual(summary["schema_version"], 1)
+            self.assertEqual(summary["inputs"], ["export_a.json", "export_b.json"])
             for name in ("monthly.csv", "categories.csv", "streets.csv", "report.html"):
                 self.assertTrue((out / name).exists(), name)
             with (out / "monthly.csv").open(encoding="utf-8") as handle:
@@ -76,12 +77,27 @@ class PrivacyTest(unittest.TestCase):
             outputs = sorted(p.name for p in out.iterdir() if p.is_file())
             self.assertEqual(
                 outputs,
-                ["categories.csv", "monthly.csv", "report.html", "streets.csv", "summary.json"],
+                [
+                    "categories.csv",
+                    "monthly.csv",
+                    "report.html",
+                    "streets.csv",
+                    "summary.json",
+                ],
             )
             for path in out.iterdir():
                 text = path.read_text(encoding="utf-8")
-                for secret in (self.PLATE, self.PLATE_2, self.NAME, self.NAME_2, "description"):
-                    self.assertNotIn(secret, text, f"{secret!r} leaked into {path.name}")
+                for secret in (
+                    self.PLATE,
+                    self.PLATE_2,
+                    self.NAME,
+                    self.NAME_2,
+                    "description",
+                ):
+                    self.assertNotIn(
+                        secret, text, f"{secret!r} leaked into {path.name}"
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
