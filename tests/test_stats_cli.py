@@ -76,7 +76,10 @@ class PrivacyTest(unittest.TestCase):
             code = run(["build", str(FIXTURES / "export_private.json"), "-o", str(out)])
             self.assertEqual(code, 0)
             outputs = sorted(p.name for p in out.iterdir() if p.is_file())
-            self.assertEqual(outputs, ["categories.csv", "monthly.csv", "streets.csv", "summary.json"])
+            self.assertEqual(
+                outputs,
+                ["categories.csv", "monthly.csv", "report.html", "streets.csv", "summary.json"],
+            )
             for path in out.iterdir():
                 text = path.read_text(encoding="utf-8")
                 for secret in (self.PLATE, self.PLATE_2, self.NAME, self.NAME_2, "description"):

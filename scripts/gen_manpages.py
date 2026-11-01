@@ -110,8 +110,8 @@ ENVIRONMENT: dict[str, list[tuple[str, str]]] = {
 # argparse definitions.
 USAGE_NOTES: dict[str, str] = {
     "p106-stats": "The build subcommand takes one or more export JSON files "
-    "and writes summary.json and the monthly/categories/streets CSVs "
-    "into --output. Fully offline: no network, no credentials.",
+    "and writes summary.json, the monthly/categories/streets CSVs and "
+    "report.html into --output. Fully offline: no network, no credentials.",
     "parking-report": "Give exactly one of a cars JSON file (input) or --intake "
     "DIR. --drive-folder requires --intake; --reporter and --json require "
     "--municipality.",
