@@ -99,5 +99,93 @@ class PrivacyTest(unittest.TestCase):
                     )
 
 
+
+
+class PlatesLedgerTest(unittest.TestCase):
+    """--plates-ledger adds an aggregated plates.csv (issue #220)."""
+
+    def _write_ledger(self, tmp: Path) -> Path:
+        path = Path(tmp) / "ledger.csv"
+        path.write_text(
+            "filed_date,plate,event_type\n"
+            "2026-10-01,1122233,חניה\n"
+            "2026-10-02,11-222-33,חניה\n"
+            "2026-10-03,1122233,חניה\n"
+            "2026-10-04,9988776,חניה\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_plates_csv_written_with_aggregate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            code = run(
+                [
+                    "build",
+                    str(FIXTURES / "export_a.json"),
+                    "-o",
+                    str(out),
+                    "--plates-ledger",
+                    str(self._write_ledger(Path(tmp))),
+                ]
+            )
+            self.assertEqual(code, 0)
+            with (out / "plates.csv").open(encoding="utf-8") as handle:
+                rows = list(csv.reader(handle))
+            self.assertEqual(
+                rows,
+                [
+                    ["plate", "reports", "first_month", "last_month"],
+                    ["11-222-33", "3", "2026-10", "2026-10"],
+                ],
+            )
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["repeat_plates_count"], 1)
+
+    def test_without_ledger_no_plates_csv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            code = run(["build", str(FIXTURES / "export_a.json"), "-o", str(out)])
+            self.assertEqual(code, 0)
+            self.assertFalse((out / "plates.csv").exists())
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["repeat_plates_count"], 0)
+
+    def test_missing_ledger_fails_cleanly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = run(
+                [
+                    "build",
+                    str(FIXTURES / "export_a.json"),
+                    "-o",
+                    str(Path(tmp) / "o"),
+                    "--plates-ledger",
+                    str(Path(tmp) / "missing.csv"),
+                ]
+            )
+            self.assertEqual(code, 1)
+
+    def test_ledger_path_itself_never_appears_in_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            code = run(
+                [
+                    "build",
+                    str(FIXTURES / "export_a.json"),
+                    "-o",
+                    str(out),
+                    "--plates-ledger",
+                    str(self._write_ledger(Path(tmp))),
+                ]
+            )
+            self.assertEqual(code, 0)
+            for path in out.iterdir():
+                self.assertNotIn(
+                    "ledger.csv",
+                    path.read_text(encoding="utf-8"),
+                    f"ledger path leaked into {path.name}",
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

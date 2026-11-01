@@ -10,8 +10,10 @@ from parking_report.stats import (
     StatsError,
     _quantile,
     closure_days,
+    display_plate,
     load_incidents,
     parse_datetime,
+    plates_summary,
     summarize,
 )
 
@@ -211,3 +213,87 @@ class ClosureDaysTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DisplayPlateTest(unittest.TestCase):
+    def test_compact_seven_digit_gets_dashes(self):
+        self.assertEqual(display_plate("1234567"), "12-345-67")
+
+    def test_compact_eight_digit_gets_dashes(self):
+        self.assertEqual(display_plate("44556677"), "445-56-677")
+
+    def test_other_spellings_kept_as_recorded(self):
+        self.assertEqual(display_plate("99-999-ז"), "99-999-ז")
+
+
+class PlatesSummaryTest(unittest.TestCase):
+    """Repeat-plate aggregate from a synthetic ledger (issue #220).
+
+    Every plate below is fake; real numbers must never enter fixtures.
+    """
+
+    def _write_ledger(self, tmp: Path, rows: list[tuple[str, str]]) -> Path:
+        import csv as _csv
+
+        path = tmp / "ledger.csv"
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = _csv.writer(handle)
+            writer.writerow(["filed_date", "plate", "event_type"])
+            writer.writerows((filed, plate, "חניה") for filed, plate in rows)
+        return path
+
+    def test_threshold_grouping_and_ordering(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger = self._write_ledger(
+                Path(td),
+                [
+                    ("2026-10-01", "1122233"),
+                    ("2026-10-02", "11-222-33"),  # same car, dashed spelling
+                    ("2026-10-05", "1122233"),
+                    ("2026-09-20", "44556677"),
+                    ("2026-10-03", "44556677"),
+                    ("2026-10-04", "44556677"),
+                    ("2026-10-06", "99-999-ז"),
+                    ("2026-10-07", "99-999-ז"),
+                    ("2026-10-08", "99-999-ז"),
+                    ("2026-10-09", "5566677"),  # below threshold
+                    ("2026-10-09", ""),  # no plate: skipped
+                    ("not-a-date", "1122233"),  # bad month: skipped
+                ],
+            )
+            rows = plates_summary(ledger)
+        self.assertEqual(
+            rows,
+            [
+                {
+                    "plate": "11-222-33",
+                    "reports": 3,
+                    "first_month": "2026-10",
+                    "last_month": "2026-10",
+                },
+                {
+                    "plate": "445-56-677",
+                    "reports": 3,
+                    "first_month": "2026-09",
+                    "last_month": "2026-10",
+                },
+                {
+                    "plate": "99-999-ז",
+                    "reports": 3,
+                    "first_month": "2026-10",
+                    "last_month": "2026-10",
+                },
+            ],
+        )
+
+    def test_min_count_is_configurable(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger = self._write_ledger(
+                Path(td), [("2026-10-01", "1122233"), ("2026-10-02", "1122233")]
+            )
+            self.assertEqual(plates_summary(ledger), [])
+            self.assertEqual(len(plates_summary(ledger, min_count=2)), 1)

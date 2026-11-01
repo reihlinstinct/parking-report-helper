@@ -23,9 +23,11 @@ Aggregation notes:
 
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -183,6 +185,63 @@ def _by_neighborhood(
         area = neighborhoods.get(street, "(אחר)")
         counts[area] = counts.get(area, 0) + 1
     return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+def display_plate(raw: str) -> str:
+    """Dashed display form for compact 7/8-digit plates; otherwise as recorded."""
+    if re.fullmatch(r"[0-9]{7}", raw):
+        return f"{raw[:2]}-{raw[2:5]}-{raw[5:]}"
+    if re.fullmatch(r"[0-9]{8}", raw):
+        return f"{raw[:3]}-{raw[3:5]}-{raw[5:]}"
+    return raw
+
+
+def plates_summary(
+    ledger_path: str | Path, *, min_count: int = 3
+) -> list[dict[str, Any]]:
+    """Repeat-plate aggregate from the private filing ledger.
+
+    The ledger never leaves the machine; only this thresholded aggregate
+    (plate, count, first/last month) may be published. Rows without a
+    plate or a parseable filed month are skipped.
+    """
+    counts: dict[str, int] = {}
+    months: dict[str, list[str]] = {}
+    spellings: dict[str, dict[str, int]] = {}
+    with open(ledger_path, encoding="utf-8", newline="") as handle:
+        for row in csv.DictReader(handle):
+            plate = (row.get("plate") or "").strip()
+            filed = (row.get("filed_date") or "").strip()
+            # Group by the separator-free key: "440-57-403" and "44057403"
+            # are the same vehicle.
+            key = re.sub(r"[-\s]", "", plate)
+            if not key or not re.match(r"[0-9]{4}-[0-9]{2}", filed):
+                continue
+            counts[key] = counts.get(key, 0) + 1
+            months.setdefault(key, []).append(filed[:7])
+            spellings.setdefault(key, {}).setdefault(plate, 0)
+            spellings[key][plate] += 1
+    rows: list[dict[str, Any]] = []
+    for key, count in counts.items():
+        if count < min_count:
+            continue
+        # Digit-only keys get the canonical dashed form; anything else uses
+        # the most common recorded spelling.
+        display = display_plate(key)
+        if display == key and not key.isdigit():
+            display = max(
+                spellings[key].items(), key=lambda kv: (kv[1], kv[0])
+            )[0]
+        rows.append(
+            {
+                "plate": display,
+                "reports": count,
+                "first_month": min(months[key]),
+                "last_month": max(months[key]),
+            }
+        )
+    rows.sort(key=lambda r: (-r["reports"], r["plate"]))
+    return rows
 
 
 def summarize(

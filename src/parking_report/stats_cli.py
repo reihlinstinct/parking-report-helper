@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from .stats import StatsError, load_incidents, summarize
+from .stats import StatsError, load_incidents, plates_summary, summarize
 from .stats_html import build_report
 
 PROG = "p106-stats"
@@ -42,10 +42,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=20,
         help="how many streets to keep in by_street (default: 20)",
     )
+    build.add_argument(
+        "--plates-ledger",
+        default=None,
+        help="optional private filing-ledger CSV; adds a repeat-plates "
+        "aggregate (plates.csv, threshold 3) - the ledger itself never "
+        "leaves the machine",
+    )
     return parser
 
 
-def _write_csv(path: Path, header: tuple[str, str], rows) -> None:
+def _write_csv(path: Path, header: tuple[str, ...], rows) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(header)
@@ -67,6 +74,14 @@ def run(argv: list[str]) -> int:
     summary = summarize(incidents, top_streets=args.top_streets)
     summary["inputs"] = [Path(p).name for p in args.inputs]
     summary["duplicates_skipped"] = duplicates
+    plate_rows: list[dict] = []
+    if args.plates_ledger:
+        try:
+            plate_rows = plates_summary(args.plates_ledger)
+        except OSError as exc:
+            print(f"{PROG}: --plates-ledger: {exc}", file=sys.stderr)
+            return 1
+    summary["repeat_plates_count"] = len(plate_rows)
 
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +99,15 @@ def run(argv: list[str]) -> int:
     _write_csv(
         out_dir / "streets.csv", ("street", "reports"), summary["by_street"].items()
     )
+    if plate_rows:
+        _write_csv(
+            out_dir / "plates.csv",
+            ("plate", "reports", "first_month", "last_month"),
+            (
+                (r["plate"], r["reports"], r["first_month"], r["last_month"])
+                for r in plate_rows
+            ),
+        )
     (out_dir / "report.html").write_text(build_report(summary), encoding="utf-8")
     print(
         f"{PROG}: {summary['total_incidents']} incidents "
