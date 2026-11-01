@@ -31,7 +31,7 @@ class BuildCommandTest(unittest.TestCase):
             self.assertEqual(summary["total_incidents"], 13)
             self.assertEqual(summary["duplicates_skipped"], 1)
             self.assertEqual(summary["schema_version"], 1)
-            for name in ("monthly.csv", "categories.csv", "streets.csv"):
+            for name in ("monthly.csv", "categories.csv", "streets.csv", "report.html"):
                 self.assertTrue((out / name).exists(), name)
             with (out / "monthly.csv").open(encoding="utf-8") as handle:
                 rows = list(csv.reader(handle))
