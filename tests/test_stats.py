@@ -315,6 +315,72 @@ class PlatesSummaryTest(unittest.TestCase):
             with self.assertRaises(StatsError):
                 plates_summary(ledger)
 
+    def test_partial_id_overlap_is_one_report(self):
+        # Reviewer edge case: a report first recorded with only folder_id,
+        # later with municipal_ref + the same folder_id, plus one other
+        # report -> 2 reports, not 3.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_text(
+                "filed_date,plate,folder_id,municipal_ref\n"
+                "2026-10-01,1122233,folder-a,\n"
+                "2026-10-01,1122233,folder-a,2601-000001\n"
+                "2026-10-02,1122233,folder-b,2601-000002\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                plates_summary(path, min_count=2),
+                [{"plate": "11-222-33", "reports": 2}],
+            )
+            self.assertEqual(plates_summary(path), [])
+
+    def test_id_chain_across_rows_is_one_report(self):
+        # folder-only row + bridging row + ref-only row: one report.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_text(
+                "filed_date,plate,folder_id,municipal_ref\n"
+                "2026-10-01,1122233,folder-a,\n"
+                "2026-10-01,1122233,folder-a,2601-000001\n"
+                "2026-10-01,1122233,,2601-000001\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                plates_summary(path, min_count=1),
+                [{"plate": "11-222-33", "reports": 1}],
+            )
+
+    def test_identical_rows_without_any_id_dedupe_conservatively(self):
+        # Reviewer edge case: three identical rows with both IDs missing
+        # must not count as 3.
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_text(
+                "filed_date,plate,street\n"
+                "2026-10-01,1122233,רחוב בדיקה\n"
+                "2026-10-01,1122233,רחוב בדיקה\n"
+                "2026-10-01,1122233,רחוב בדיקה\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(plates_summary(path), [])
+            # different days do count separately
+            path.write_text(
+                "filed_date,plate,street\n"
+                "2026-10-01,1122233,רחוב בדיקה\n"
+                "2026-10-02,1122233,רחוב בדיקה\n"
+                "2026-10-03,1122233,רחוב אחרת\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                plates_summary(path), [{"plate": "11-222-33", "reports": 3}]
+            )
+
     def test_min_count_is_configurable(self):
         import tempfile
 

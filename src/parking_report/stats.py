@@ -196,16 +196,67 @@ def display_plate(raw: str) -> str:
     return raw
 
 
+def _find(parent: list[int], i: int) -> int:
+    while parent[i] != i:
+        parent[i] = parent[parent[i]]
+        i = parent[i]
+    return i
+
+
+def _union(parent: list[int], a: int, b: int) -> None:
+    ra, rb = _find(parent, a), _find(parent, b)
+    if ra != rb:
+        parent[ra] = rb
+
+
+def _report_groups(rows: list[dict[str, str | None]]) -> int:
+    """Distinct reports: rows sharing ANY identifier are the same report.
+
+    Union-find over folder_id and municipal_ref (a report may first be
+    recorded with only a folder_id and later gain its municipal_ref).
+    Rows lacking both identifiers dedupe on (filed_date, street) so
+    identical re-recordings cannot inflate the count; that can merge two
+    genuinely distinct same-day reports, which undercounts - the safe
+    direction for a public threshold.
+    """
+    parent = list(range(len(rows)))
+    by_folder: dict[str, int] = {}
+    by_ref: dict[str, int] = {}
+    by_fallback: dict[tuple[str, str], int] = {}
+    for i, row in enumerate(rows):
+        folder = (row.get("folder_id") or "").strip()
+        ref = (row.get("municipal_ref") or "").strip()
+        if folder:
+            if folder in by_folder:
+                _union(parent, i, by_folder[folder])
+            else:
+                by_folder[folder] = i
+        if ref:
+            if ref in by_ref:
+                _union(parent, i, by_ref[ref])
+            else:
+                by_ref[ref] = i
+        if not folder and not ref:
+            key = (
+                (row.get("filed_date") or "").strip(),
+                (row.get("street") or "").strip(),
+            )
+            if key in by_fallback:
+                _union(parent, i, by_fallback[key])
+            else:
+                by_fallback[key] = i
+    return len({_find(parent, i) for i in range(len(rows))})
+
+
 def plates_summary(
     ledger_path: str | Path, *, min_count: int = 3
 ) -> list[dict[str, Any]]:
     """Repeat-plate aggregate from the private filing ledger.
 
     The ledger never leaves the machine; only this thresholded aggregate
-    (plate, count) may be published. Reports are deduplicated by municipal
-    case id (``municipal_ref``, falling back to ``folder_id``) so a case
-    recorded twice does not inflate a plate past the threshold. Rows
-    without a plate are skipped.
+    (plate, count) may be published. Reports are deduplicated by shared
+    identifiers (see _report_groups) so a case recorded twice does not
+    inflate a plate past the threshold. Rows without a plate are skipped.
     """
     with open(ledger_path, encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -215,26 +266,21 @@ def plates_summary(
             raise StatsError(
                 f"ledger {ledger_path}: missing column(s) {sorted(missing)}"
             )
-        case_ids: dict[str, set[str]] = {}
+        by_plate: dict[str, list[dict[str, str | None]]] = {}
         spellings: dict[str, dict[str, int]] = {}
-        for n, row in enumerate(reader):
+        for row in reader:
             plate = (row.get("plate") or "").strip()
             # Group by the separator-free key: "440-57-403" and "44057403"
             # are the same vehicle.
             key = re.sub(r"[-\s]", "", plate)
             if not key:
                 continue
-            case_id = (
-                (row.get("municipal_ref") or "").strip()
-                or (row.get("folder_id") or "").strip()
-                or f"row-{n}"
-            )
-            case_ids.setdefault(key, set()).add(case_id)
+            by_plate.setdefault(key, []).append(row)
             spellings.setdefault(key, {}).setdefault(plate, 0)
             spellings[key][plate] += 1
     rows: list[dict[str, Any]] = []
-    for key, ids in case_ids.items():
-        count = len(ids)
+    for key, plate_rows in by_plate.items():
+        count = _report_groups(plate_rows)
         if count < min_count:
             continue
         # Digit-only keys get the canonical dashed form; anything else uses
