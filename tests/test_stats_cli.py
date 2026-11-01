@@ -60,8 +60,6 @@ class BuildCommandTest(unittest.TestCase):
             self.assertEqual(code, 2)
 
 
-if __name__ == "__main__":
-    unittest.main()
 class PrivacyTest(unittest.TestCase):
     """Private source fields (plates, names in `description`) never leak (#210)."""
 
@@ -84,3 +82,6 @@ class PrivacyTest(unittest.TestCase):
                 text = path.read_text(encoding="utf-8")
                 for secret in (self.PLATE, self.PLATE_2, self.NAME, self.NAME_2, "description"):
                     self.assertNotIn(secret, text, f"{secret!r} leaked into {path.name}")
+
+if __name__ == "__main__":
+    unittest.main()
