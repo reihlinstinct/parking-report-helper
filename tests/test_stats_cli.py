@@ -99,19 +99,17 @@ class PrivacyTest(unittest.TestCase):
                     )
 
 
-
-
 class PlatesLedgerTest(unittest.TestCase):
     """--plates-ledger adds an aggregated plates.csv (issue #220)."""
 
     def _write_ledger(self, tmp: Path) -> Path:
         path = Path(tmp) / "ledger.csv"
         path.write_text(
-            "filed_date,plate,event_type\n"
-            "2026-10-01,1122233,חניה\n"
-            "2026-10-02,11-222-33,חניה\n"
-            "2026-10-03,1122233,חניה\n"
-            "2026-10-04,9988776,חניה\n",
+            "filed_date,plate,municipal_ref,event_type\n"
+            "2026-10-01,1122233,2601-000001,חניה\n"
+            "2026-10-02,11-222-33,2601-000002,חניה\n"
+            "2026-10-03,1122233,2601-000003,חניה\n"
+            "2026-10-04,9988776,2601-000004,חניה\n",
             encoding="utf-8",
         )
         return path
@@ -135,8 +133,8 @@ class PlatesLedgerTest(unittest.TestCase):
             self.assertEqual(
                 rows,
                 [
-                    ["plate", "reports", "first_month", "last_month"],
-                    ["11-222-33", "3", "2026-10", "2026-10"],
+                    ["plate", "reports"],
+                    ["11-222-33", "3"],
                 ],
             )
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
@@ -185,6 +183,53 @@ class PlatesLedgerTest(unittest.TestCase):
                     path.read_text(encoding="utf-8"),
                     f"ledger path leaked into {path.name}",
                 )
+
+    def test_stale_plates_csv_removed_when_none_qualify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            out.mkdir()
+            stale = out / "plates.csv"
+            stale.write_text("plate,reports\n11-222-33,5\n", encoding="utf-8")
+            ledger = Path(tmp) / "ledger.csv"
+            ledger.write_text(
+                "filed_date,plate,municipal_ref\n"
+                "2026-10-01,1122233,2601-000001\n"
+                "2026-10-02,1122233,2601-000002\n",
+                encoding="utf-8",
+            )
+            code = run(
+                [
+                    "build",
+                    str(FIXTURES / "export_a.json"),
+                    "-o",
+                    str(out),
+                    "--plates-ledger",
+                    str(ledger),
+                ]
+            )
+            self.assertEqual(code, 0)
+            self.assertFalse(stale.exists())
+            summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["repeat_plates_count"], 0)
+
+    def test_ledger_without_plate_column_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.csv"
+            ledger.write_text(
+                "filed_date,event_type\n2026-10-01,חניה\n", encoding="utf-8"
+            )
+            code = run(
+                [
+                    "build",
+                    str(FIXTURES / "export_a.json"),
+                    "-o",
+                    str(Path(tmp) / "o"),
+                    "--plates-ledger",
+                    str(ledger),
+                ]
+            )
+            self.assertEqual(code, 1)
+            self.assertFalse((Path(tmp) / "o" / "plates.csv").exists())
 
 
 if __name__ == "__main__":

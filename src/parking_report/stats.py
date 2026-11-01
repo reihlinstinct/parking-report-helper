@@ -202,44 +202,47 @@ def plates_summary(
     """Repeat-plate aggregate from the private filing ledger.
 
     The ledger never leaves the machine; only this thresholded aggregate
-    (plate, count, first/last month) may be published. Rows without a
-    plate or a parseable filed month are skipped.
+    (plate, count) may be published. Reports are deduplicated by municipal
+    case id (``municipal_ref``, falling back to ``folder_id``) so a case
+    recorded twice does not inflate a plate past the threshold. Rows
+    without a plate are skipped.
     """
-    counts: dict[str, int] = {}
-    months: dict[str, list[str]] = {}
-    spellings: dict[str, dict[str, int]] = {}
     with open(ledger_path, encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
+        reader = csv.DictReader(handle)
+        header = set(reader.fieldnames or ())
+        missing = {"plate", "filed_date"} - header
+        if missing:
+            raise StatsError(
+                f"ledger {ledger_path}: missing column(s) {sorted(missing)}"
+            )
+        case_ids: dict[str, set[str]] = {}
+        spellings: dict[str, dict[str, int]] = {}
+        for n, row in enumerate(reader):
             plate = (row.get("plate") or "").strip()
-            filed = (row.get("filed_date") or "").strip()
             # Group by the separator-free key: "440-57-403" and "44057403"
             # are the same vehicle.
             key = re.sub(r"[-\s]", "", plate)
-            if not key or not re.match(r"[0-9]{4}-[0-9]{2}", filed):
+            if not key:
                 continue
-            counts[key] = counts.get(key, 0) + 1
-            months.setdefault(key, []).append(filed[:7])
+            case_id = (
+                (row.get("municipal_ref") or "").strip()
+                or (row.get("folder_id") or "").strip()
+                or f"row-{n}"
+            )
+            case_ids.setdefault(key, set()).add(case_id)
             spellings.setdefault(key, {}).setdefault(plate, 0)
             spellings[key][plate] += 1
     rows: list[dict[str, Any]] = []
-    for key, count in counts.items():
+    for key, ids in case_ids.items():
+        count = len(ids)
         if count < min_count:
             continue
         # Digit-only keys get the canonical dashed form; anything else uses
         # the most common recorded spelling.
         display = display_plate(key)
         if display == key and not key.isdigit():
-            display = max(
-                spellings[key].items(), key=lambda kv: (kv[1], kv[0])
-            )[0]
-        rows.append(
-            {
-                "plate": display,
-                "reports": count,
-                "first_month": min(months[key]),
-                "last_month": max(months[key]),
-            }
-        )
+            display = max(spellings[key].items(), key=lambda kv: (kv[1], kv[0]))[0]
+        rows.append({"plate": display, "reports": count})
     rows.sort(key=lambda r: (-r["reports"], r["plate"]))
     return rows
 

@@ -232,14 +232,20 @@ class PlatesSummaryTest(unittest.TestCase):
     Every plate below is fake; real numbers must never enter fixtures.
     """
 
-    def _write_ledger(self, tmp: Path, rows: list[tuple[str, str]]) -> Path:
+    def _write_ledger(
+        self, tmp: Path, rows: list[tuple[str, str, str]], *, header: str | None = None
+    ) -> Path:
         import csv as _csv
 
         path = tmp / "ledger.csv"
         with path.open("w", encoding="utf-8", newline="") as handle:
             writer = _csv.writer(handle)
-            writer.writerow(["filed_date", "plate", "event_type"])
-            writer.writerows((filed, plate, "חניה") for filed, plate in rows)
+            writer.writerow(
+                header.split(",")
+                if header
+                else ["filed_date", "plate", "municipal_ref", "event_type"]
+            )
+            writer.writerows(rows)
         return path
 
     def test_threshold_grouping_and_ordering(self):
@@ -249,51 +255,76 @@ class PlatesSummaryTest(unittest.TestCase):
             ledger = self._write_ledger(
                 Path(td),
                 [
-                    ("2026-10-01", "1122233"),
-                    ("2026-10-02", "11-222-33"),  # same car, dashed spelling
-                    ("2026-10-05", "1122233"),
-                    ("2026-09-20", "44556677"),
-                    ("2026-10-03", "44556677"),
-                    ("2026-10-04", "44556677"),
-                    ("2026-10-06", "99-999-ז"),
-                    ("2026-10-07", "99-999-ז"),
-                    ("2026-10-08", "99-999-ז"),
-                    ("2026-10-09", "5566677"),  # below threshold
-                    ("2026-10-09", ""),  # no plate: skipped
-                    ("not-a-date", "1122233"),  # bad month: skipped
+                    ("2026-10-01", "1122233", "2601-000001"),
+                    ("2026-10-02", "11-222-33", "2601-000002"),  # same car, dashed
+                    ("2026-10-05", "1122233", "2601-000003"),
+                    ("2026-09-20", "44556677", "2601-000004"),
+                    ("2026-10-03", "44556677", "2601-000005"),
+                    ("2026-10-04", "44556677", "2601-000006"),
+                    ("2026-10-06", "99-999-ז", "2601-000007"),
+                    ("2026-10-07", "99-999-ז", "2601-000008"),
+                    ("2026-10-08", "99-999-ז", "2601-000009"),
+                    ("2026-10-09", "5566677", "2601-000010"),  # below threshold
+                    ("2026-10-09", "", "2601-000011"),  # no plate: skipped
                 ],
             )
             rows = plates_summary(ledger)
         self.assertEqual(
             rows,
             [
-                {
-                    "plate": "11-222-33",
-                    "reports": 3,
-                    "first_month": "2026-10",
-                    "last_month": "2026-10",
-                },
-                {
-                    "plate": "445-56-677",
-                    "reports": 3,
-                    "first_month": "2026-09",
-                    "last_month": "2026-10",
-                },
-                {
-                    "plate": "99-999-ז",
-                    "reports": 3,
-                    "first_month": "2026-10",
-                    "last_month": "2026-10",
-                },
+                {"plate": "11-222-33", "reports": 3},
+                {"plate": "445-56-677", "reports": 3},
+                {"plate": "99-999-ז", "reports": 3},
             ],
         )
+
+    def test_same_case_recorded_twice_counts_once(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger = self._write_ledger(
+                Path(td),
+                [
+                    ("2026-10-01", "1122233", "2601-000001"),
+                    ("2026-10-01", "1122233", "2601-000001"),  # duplicate recording
+                    ("2026-10-02", "1122233", "2601-000002"),
+                    ("2026-10-03", "1122233", "2601-000003"),
+                ],
+            )
+            self.assertEqual(
+                plates_summary(ledger), [{"plate": "11-222-33", "reports": 3}]
+            )
+
+    def test_missing_plate_column_is_a_loud_error(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger = self._write_ledger(
+                Path(td), [("2026-10-01", "חניה")], header="filed_date,event_type"
+            )
+            with self.assertRaises(StatsError):
+                plates_summary(ledger)
+
+    def test_missing_filed_date_column_is_a_loud_error(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            ledger = self._write_ledger(
+                Path(td), [("1122233", "חניה")], header="plate,event_type"
+            )
+            with self.assertRaises(StatsError):
+                plates_summary(ledger)
 
     def test_min_count_is_configurable(self):
         import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             ledger = self._write_ledger(
-                Path(td), [("2026-10-01", "1122233"), ("2026-10-02", "1122233")]
+                Path(td),
+                [
+                    ("2026-10-01", "1122233", "2601-000001"),
+                    ("2026-10-02", "1122233", "2601-000002"),
+                ],
             )
             self.assertEqual(plates_summary(ledger), [])
             self.assertEqual(len(plates_summary(ledger, min_count=2)), 1)

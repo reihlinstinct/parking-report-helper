@@ -46,8 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--plates-ledger",
         default=None,
         help="optional private filing-ledger CSV; adds a repeat-plates "
-        "aggregate (plates.csv, threshold 3) - the ledger itself never "
-        "leaves the machine",
+        "aggregate (plates.csv with plate,reports for 3+ distinct "
+        "filed reports) - the ledger itself never leaves the machine",
     )
     return parser
 
@@ -78,7 +78,7 @@ def run(argv: list[str]) -> int:
     if args.plates_ledger:
         try:
             plate_rows = plates_summary(args.plates_ledger)
-        except OSError as exc:
+        except (OSError, StatsError) as exc:
             print(f"{PROG}: --plates-ledger: {exc}", file=sys.stderr)
             return 1
     summary["repeat_plates_count"] = len(plate_rows)
@@ -99,15 +99,17 @@ def run(argv: list[str]) -> int:
     _write_csv(
         out_dir / "streets.csv", ("street", "reports"), summary["by_street"].items()
     )
+    plates_path = out_dir / "plates.csv"
     if plate_rows:
         _write_csv(
-            out_dir / "plates.csv",
-            ("plate", "reports", "first_month", "last_month"),
-            (
-                (r["plate"], r["reports"], r["first_month"], r["last_month"])
-                for r in plate_rows
-            ),
+            plates_path,
+            ("plate", "reports"),
+            ((r["plate"], r["reports"]) for r in plate_rows),
         )
+    elif args.plates_ledger and plates_path.exists():
+        # A previous build with the flag wrote a plates.csv; remove the
+        # stale file so it cannot be published by mistake.
+        plates_path.unlink()
     (out_dir / "report.html").write_text(build_report(summary), encoding="utf-8")
     print(
         f"{PROG}: {summary['total_incidents']} incidents "
