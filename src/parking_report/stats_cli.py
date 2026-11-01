@@ -83,8 +83,8 @@ def run(argv: list[str]) -> int:
             return 1
         if skipped_ids:
             print(
-                f"{PROG}: --plates-ledger: {skipped_ids} row(s) without "
-                "identifiers excluded from the plate counts",
+                f"{PROG}: --plates-ledger: {skipped_ids} row(s) excluded "
+                "(no identifiers, invalid plate or invalid filed_date)",
                 file=sys.stderr,
             )
     summary["repeat_plates_count"] = len(plate_rows)
@@ -112,9 +112,9 @@ def run(argv: list[str]) -> int:
             ("plate", "reports"),
             ((r["plate"], r["reports"]) for r in plate_rows),
         )
-    elif args.plates_ledger and plates_path.exists():
-        # A previous build with the flag wrote a plates.csv; remove the
-        # stale file so it cannot be published by mistake.
+    elif plates_path.exists():
+        # Any build that does not emit plates.csv removes a stale one
+        # (with or without the flag) so it cannot be published by mistake.
         plates_path.unlink()
     (out_dir / "report.html").write_text(build_report(summary), encoding="utf-8")
     print(

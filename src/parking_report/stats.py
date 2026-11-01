@@ -187,13 +187,35 @@ def _by_neighborhood(
     return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
 
 
-def display_plate(raw: str) -> str:
-    """Dashed display form for compact 7/8-digit plates; otherwise as recorded."""
-    if re.fullmatch(r"[0-9]{7}", raw):
-        return f"{raw[:2]}-{raw[2:5]}-{raw[5:]}"
-    if re.fullmatch(r"[0-9]{8}", raw):
-        return f"{raw[:3]}-{raw[3:5]}-{raw[5:]}"
-    return raw
+_PLATE_FORMS = (
+    re.compile(r"^[0-9]{7}$"),
+    re.compile(r"^[0-9]{8}$"),
+    re.compile(r"^[0-9]{2}-[0-9]{3}-[0-9]{2}$"),
+    re.compile(r"^[0-9]{3}-[0-9]{2}-[0-9]{3}$"),
+)
+
+
+def plate_digits(raw: str) -> str | None:
+    """Digits of a standard Israeli plate, or None for anything else.
+
+    Only pure 7/8-digit numbers, optionally dashed in the standard
+    positions, are publishable; free text, Hebrew-letter formats,
+    bidi/control characters and formula prefixes are all rejected.
+    """
+    text = raw.strip()
+    for pattern in _PLATE_FORMS:
+        if pattern.fullmatch(text):
+            return text.replace("-", "")
+    return None
+
+
+def display_plate(digits: str) -> str:
+    """Canonical dashed display form for 7/8-digit plates."""
+    if len(digits) == 7:
+        return f"{digits[:2]}-{digits[2:5]}-{digits[5:]}"
+    if len(digits) == 8:
+        return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+    return digits
 
 
 def _find(parent: list[int], i: int) -> int:
@@ -235,58 +257,70 @@ def _report_groups(rows: list[dict[str, str | None]]) -> int:
     return len({_find(parent, i) for i in range(len(rows))})
 
 
+def _valid_filed_date(raw: str) -> bool:
+    """A real ISO calendar date (rejects blanks and 2026-02-30)."""
+    text = raw.strip()
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", text):
+        return False
+    try:
+        dt.date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
 def plates_summary(
     ledger_path: str | Path, *, min_count: int = 3
 ) -> tuple[list[dict[str, Any]], int]:
     """Repeat-plate aggregate from the private filing ledger.
 
-    Returns (rows, skipped_unidentified). The ledger never leaves the
-    machine; only the thresholded aggregate (plate, count) may be
-    published. Reports are deduplicated by shared identifiers (see
-    _report_groups) so a case recorded twice does not inflate a plate
-    past the threshold. Rows without a plate, and rows lacking BOTH
-    identifiers (folder_id and municipal_ref), are excluded from the
-    counts - an unidentifiable copy of an identified report must not be
-    able to push a plate past the threshold.
+    Returns (rows, skipped). The ledger never leaves the machine; only
+    the thresholded aggregate (plate, count) may be published, and only
+    canonical dashed standard plates appear in it. Reports are
+    deduplicated by shared identifiers (see _report_groups) so a case
+    recorded twice does not inflate a plate past the threshold. Rows
+    excluded from the counts (counted in ``skipped``):
+
+    - no plate, or a plate that is not a standard 7/8-digit number
+      (optionally dashed in the standard positions);
+    - no valid filed_date;
+    - no identifier at all (neither folder_id nor municipal_ref) - an
+      unidentifiable copy of an identified report must not be able to
+      push a plate past the threshold.
     """
-    with open(ledger_path, encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        header = set(reader.fieldnames or ())
-        missing = {"plate", "filed_date"} - header
-        if missing:
-            raise StatsError(
-                f"ledger {ledger_path}: missing column(s) {sorted(missing)}"
-            )
-        by_plate: dict[str, list[dict[str, str | None]]] = {}
-        spellings: dict[str, dict[str, int]] = {}
-        skipped = 0
-        for row in reader:
-            plate = (row.get("plate") or "").strip()
-            # Group by the separator-free key: "440-57-403" and "44057403"
-            # are the same vehicle.
-            key = re.sub(r"[-\s]", "", plate)
-            if not key:
-                continue
-            if (
-                not (row.get("folder_id") or "").strip()
-                and not (row.get("municipal_ref") or "").strip()
-            ):
-                skipped += 1
-                continue
-            by_plate.setdefault(key, []).append(row)
-            spellings.setdefault(key, {}).setdefault(plate, 0)
-            spellings[key][plate] += 1
+    by_plate: dict[str, list[dict[str, str | None]]] = {}
+    skipped = 0
+    try:
+        with open(ledger_path, encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle, strict=True)
+            header = set(reader.fieldnames or ())
+            missing = {"plate", "filed_date"} - header
+            if missing:
+                raise StatsError(
+                    f"ledger {ledger_path}: missing column(s) {sorted(missing)}"
+                )
+            for row in reader:
+                digits = plate_digits(row.get("plate") or "")
+                if digits is None or not _valid_filed_date(row.get("filed_date") or ""):
+                    skipped += 1
+                    continue
+                if (
+                    not (row.get("folder_id") or "").strip()
+                    and not (row.get("municipal_ref") or "").strip()
+                ):
+                    skipped += 1
+                    continue
+                by_plate.setdefault(digits, []).append(row)
+    except csv.Error as exc:
+        raise StatsError(f"ledger {ledger_path}: malformed CSV: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise StatsError(f"ledger {ledger_path}: not valid UTF-8: {exc}") from exc
     rows: list[dict[str, Any]] = []
-    for key, plate_rows in by_plate.items():
+    for digits, plate_rows in by_plate.items():
         count = _report_groups(plate_rows)
         if count < min_count:
             continue
-        # Digit-only keys get the canonical dashed form; anything else uses
-        # the most common recorded spelling.
-        display = display_plate(key)
-        if display == key and not key.isdigit():
-            display = max(spellings[key].items(), key=lambda kv: (kv[1], kv[0]))[0]
-        rows.append({"plate": display, "reports": count})
+        rows.append({"plate": display_plate(digits), "reports": count})
     rows.sort(key=lambda r: (-r["reports"], r["plate"]))
     return rows, skipped
 

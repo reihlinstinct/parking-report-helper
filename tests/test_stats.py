@@ -13,6 +13,7 @@ from parking_report.stats import (
     display_plate,
     load_incidents,
     parse_datetime,
+    plate_digits,
     plates_summary,
     summarize,
 )
@@ -222,8 +223,29 @@ class DisplayPlateTest(unittest.TestCase):
     def test_compact_eight_digit_gets_dashes(self):
         self.assertEqual(display_plate("44556677"), "445-56-677")
 
-    def test_other_spellings_kept_as_recorded(self):
-        self.assertEqual(display_plate("99-999-ז"), "99-999-ז")
+
+class PlateDigitsTest(unittest.TestCase):
+    def test_standard_forms_accepted(self):
+        self.assertEqual(plate_digits("1234567"), "1234567")
+        self.assertEqual(plate_digits("44556677"), "44556677")
+        self.assertEqual(plate_digits("12-345-67"), "1234567")
+        self.assertEqual(plate_digits("445-56-677"), "44556677")
+        self.assertEqual(plate_digits("  1234567 "), "1234567")
+
+    def test_nonstandard_plates_rejected(self):
+        for bad in (
+            "99-999-ז",  # Hebrew-letter special format: not published
+            "=1234567",  # spreadsheet formula prefix
+            "+1234567",
+            "@1234567",
+            "123",  # too short
+            "123456789",  # too long
+            "12-34-567",  # dashes in non-standard positions
+            "abc-defg-h",
+            "1234567\u202e",  # bidi control
+            "",
+        ):
+            self.assertIsNone(plate_digits(bad), bad)
 
 
 class PlatesSummaryTest(unittest.TestCase):
@@ -261,9 +283,9 @@ class PlatesSummaryTest(unittest.TestCase):
                     ("2026-09-20", "44556677", "2601-000004"),
                     ("2026-10-03", "44556677", "2601-000005"),
                     ("2026-10-04", "44556677", "2601-000006"),
-                    ("2026-10-06", "99-999-ז", "2601-000007"),
-                    ("2026-10-07", "99-999-ז", "2601-000008"),
-                    ("2026-10-08", "99-999-ז", "2601-000009"),
+                    ("2026-10-06", "88-977-66", "2601-000007"),
+                    ("2026-10-07", "88-977-66", "2601-000008"),
+                    ("2026-10-08", "88-977-66", "2601-000009"),
                     ("2026-10-09", "5566677", "2601-000010"),  # below threshold
                     ("2026-10-09", "", "2601-000011"),  # no plate: skipped
                 ],
@@ -274,7 +296,7 @@ class PlatesSummaryTest(unittest.TestCase):
             [
                 {"plate": "11-222-33", "reports": 3},
                 {"plate": "445-56-677", "reports": 3},
-                {"plate": "99-999-ז", "reports": 3},
+                {"plate": "88-977-66", "reports": 3},
             ],
         )
 
@@ -372,6 +394,46 @@ class PlatesSummaryTest(unittest.TestCase):
             # id-less rows alone can never qualify a plate
             rows, skipped = plates_summary(path, min_count=3)
             self.assertEqual(rows, [])
+
+    def test_invalid_filed_dates_are_excluded(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_text(
+                "filed_date,plate,municipal_ref\n"
+                "2026-10-01,1122233,2601-000001\n"
+                "2026-02-30,1122233,2601-000002\n"  # impossible date
+                ",1122233,2601-000003\n"  # blank date
+                "next Tuesday,1122233,2601-000004\n"
+                "2026-10-02,1122233,2601-000005\n",
+                encoding="utf-8",
+            )
+            rows, skipped = plates_summary(path, min_count=1)
+            self.assertEqual(rows, [{"plate": "11-222-33", "reports": 2}])
+            self.assertEqual(skipped, 3)
+
+    def test_malformed_csv_is_a_loud_error(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_text(
+                "filed_date,plate,municipal_ref\n"
+                '2026-10-01,"1122233,2601-000001\n',  # unterminated quote
+                encoding="utf-8",
+            )
+            with self.assertRaises(StatsError):
+                plates_summary(path)
+
+    def test_invalid_utf8_is_a_loud_error(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "ledger.csv"
+            path.write_bytes(b"filed_date,plate\n2026-10-01,\xff\xfe\n")
+            with self.assertRaises(StatsError):
+                plates_summary(path)
 
     def test_min_count_is_configurable(self):
         import tempfile

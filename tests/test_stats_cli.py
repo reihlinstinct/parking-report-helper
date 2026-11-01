@@ -212,6 +212,43 @@ class PlatesLedgerTest(unittest.TestCase):
             summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["repeat_plates_count"], 0)
 
+    def test_stale_plates_csv_removed_even_without_the_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "out"
+            out.mkdir()
+            stale = out / "plates.csv"
+            stale.write_text("plate,reports\n11-222-33,5\n", encoding="utf-8")
+            code = run(["build", str(FIXTURES / "export_a.json"), "-o", str(out)])
+            self.assertEqual(code, 0)
+            self.assertFalse(stale.exists())
+
+    def test_excluded_rows_reported_on_stderr(self):
+        import io
+        from contextlib import redirect_stderr
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.csv"
+            ledger.write_text(
+                "filed_date,plate,municipal_ref\n"
+                "2026-10-01,not-a-plate,2601-000001\n"
+                "2026-02-30,1122233,2601-000002\n",
+                encoding="utf-8",
+            )
+            buf = io.StringIO()
+            with redirect_stderr(buf):
+                code = run(
+                    [
+                        "build",
+                        str(FIXTURES / "export_a.json"),
+                        "-o",
+                        str(Path(tmp) / "o"),
+                        "--plates-ledger",
+                        str(ledger),
+                    ]
+                )
+            self.assertEqual(code, 0)
+            self.assertIn("2 row(s) excluded", buf.getvalue())
+
     def test_ledger_without_plate_column_fails_loudly(self):
         with tempfile.TemporaryDirectory() as tmp:
             ledger = Path(tmp) / "ledger.csv"
