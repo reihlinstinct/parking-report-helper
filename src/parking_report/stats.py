@@ -4,6 +4,17 @@ Everything here is offline: input files never leave the machine, no network
 calls, no telemetry. Input is the ``reports_raw.json`` shape produced by the
 municipality export: ``{"incidents": [...], ...}``. Only synthetic fixtures
 are used in tests; real exports must never be committed (see the issue).
+
+Aggregation notes:
+
+- Quantiles (median/p25/p75) use the nearest-rank method on the sorted
+  values: the value at index ``ceil(fraction * n) - 1``. With few data
+  points this intentionally returns an observed value, never an
+  interpolation.
+- An incident whose ``createdon`` is missing or unparseable is counted in
+  ``total_incidents`` and in every date-independent aggregate, but in no
+  month: it cannot be placed on the timeline, and guessing a month would
+  be worse than dropping it there.
 """
 
 from __future__ import annotations
@@ -12,10 +23,6 @@ import datetime as dt
 import json
 from pathlib import Path
 from typing import Any, Iterable
-
-# Fields the aggregations rely on; every one is tolerated as missing/null.
-DATE_FIELDS = ("createdon", "modifiedon", "ClosedDateIncident")
-TEXT_FIELDS = ("case_number", "streetname", "subjectname", "statusname")
 
 NO_STREET = "(ללא רחוב)"
 UNKNOWN = "(לא ידוע)"

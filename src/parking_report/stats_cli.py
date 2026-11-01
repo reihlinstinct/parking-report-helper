@@ -30,8 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build", help="build statistics from export files")
     build.add_argument("inputs", nargs="+", help="reports_raw.json export file(s)")
     build.add_argument(
-        "-o",
         "--output",
+        "-o",
         required=True,
         help="output directory for summary.json and the CSV tables",
     )
