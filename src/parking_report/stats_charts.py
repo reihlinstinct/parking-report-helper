@@ -85,3 +85,41 @@ def closure_chart(buckets: dict[str, int]) -> str:
         color=COLORS[4],
         label_width=150,
     )
+
+
+def weekly_chart(by_week: dict[str, int]) -> str:
+    return horizontal_bars(
+        list(by_week.items()), title="דיווחים לפי שבוע (12 אחרונים)", label_width=90
+    )
+
+
+def hotspot_chart(hotspots: dict[str, int]) -> str:
+    return horizontal_bars(
+        list(hotspots.items()),
+        title="נקודות חמות: הכתובות המדווחות ביותר",
+        color=COLORS[2],
+        label_width=190,
+    )
+
+
+def neighborhood_chart(by_neighborhood: dict[str, int]) -> str:
+    return horizontal_bars(
+        list(by_neighborhood.items()),
+        title="דיווחים לפי שכונה",
+        color=COLORS[5],
+        label_width=150,
+    )
+
+
+def status_chart(by_status: dict[str, int]) -> str:
+    return horizontal_bars(
+        list(by_status.items()), title="סטטוס פניות", color=COLORS[3], label_width=130
+    )
+
+
+def closure_by_category_chart(medians: dict[str, float]) -> str:
+    return horizontal_bars(
+        list(medians.items()),
+        title="חציון ימי סגירה לפי קטגוריה",
+        color=COLORS[4],
+    )

@@ -7,10 +7,15 @@ import xml.etree.ElementTree as ET
 
 from parking_report.stats_charts import (
     category_chart,
+    closure_by_category_chart,
     closure_chart,
     horizontal_bars,
+    hotspot_chart,
     monthly_chart,
+    neighborhood_chart,
+    status_chart,
     street_chart,
+    weekly_chart,
 )
 from parking_report.stats_html import build_report
 
@@ -54,9 +59,14 @@ class ChartBuildersTest(unittest.TestCase):
     def test_each_builder_renders(self):
         for chart in (
             monthly_chart(MONTHS),
+            weekly_chart({"2026-W44": 3}),
             category_chart(CATEGORIES),
             street_chart(STREETS),
             closure_chart(BUCKETS),
+            hotspot_chart({"רחוב הדוגמה 1": 6}),
+            neighborhood_chart({"שכונת הדוגמה": 7}),
+            status_chart({"סיום טיפול": 9}),
+            closure_by_category_chart({"חניה על מדרכה": 1.5}),
         ):
             _parse(chart)
 
@@ -70,6 +80,9 @@ class BuildReportTest(unittest.TestCase):
             "by_month": MONTHS,
             "by_category": CATEGORIES,
             "by_street": STREETS,
+            "by_week": {"2026-W22": 4, "2026-W23": 4, "2026-W27": 4},
+            "hotspots": {"רחוב הדוגמה 1": 6, "שדרות הבדיקה 3": 3},
+            "by_neighborhood": None,
             "by_status": {"סיום טיפול": 9, "בטיפול": 4},
             "closure": {
                 "closed_count": 9,
@@ -87,7 +100,7 @@ class BuildReportTest(unittest.TestCase):
         page = build_report(self._summary())
         self.assertIn('<html lang="he" dir="rtl">', page)
         self.assertIn("סטטיסטיקת דיווחי 106", page)
-        self.assertEqual(page.count("<svg"), 4)
+        self.assertEqual(page.count("<svg"), 8)
         self.assertIn("2026-05-01", page)
         self.assertIn("synthetic.json", page)
 

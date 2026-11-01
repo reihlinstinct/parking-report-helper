@@ -6,9 +6,14 @@ import html
 
 from .stats_charts import (
     category_chart,
+    closure_by_category_chart,
     closure_chart,
+    hotspot_chart,
     monthly_chart,
+    neighborhood_chart,
+    status_chart,
     street_chart,
+    weekly_chart,
 )
 
 _CSS = """
@@ -50,8 +55,12 @@ def build_report(summary: dict) -> str:
         ]
     )
     medians = closure["median_days_by_category"]
-    medians_table = _kv_table([(category, days) for category, days in medians.items()])
-    status_table = _kv_table(list(summary["by_status"].items()))
+    neighborhood = summary.get("by_neighborhood")
+    neighborhood_section = ""
+    if neighborhood:
+        neighborhood_section = "<h2>דיווחים לפי שכונה</h2>" + neighborhood_chart(
+            neighborhood
+        )
     inputs = ", ".join(_esc(path) for path in summary.get("inputs", []))
     return f"""<!DOCTYPE html>
 <html lang="he" dir="rtl">
@@ -67,16 +76,21 @@ def build_report(summary: dict) -> str:
 {overview}
 <h2>דיווחים לפי חודש</h2>
 {monthly_chart(summary["by_month"])}
+<h2>דיווחים לפי שבוע</h2>
+{weekly_chart(summary["by_week"])}
 <h2>דיווחים לפי קטגוריה</h2>
 {category_chart(summary["by_category"])}
+{neighborhood_section}
 <h2>הרחובות המדווחים ביותר</h2>
 {street_chart(summary["by_street"])}
+<h2>נקודות חמות</h2>
+{hotspot_chart(summary["hotspots"])}
 <h2>זמני סגירה</h2>
 {closure_chart(closure["buckets"])}
-<h2>חציון זמן סגירה לפי קטגוריה (ימים)</h2>
-{medians_table}
+<h2>חציון ימי סגירה לפי קטגוריה</h2>
+{closure_by_category_chart(medians)}
 <h2>סטטוס פניות</h2>
-{status_table}
+{status_chart(summary["by_status"])}
 </body>
 </html>
 """

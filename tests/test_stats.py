@@ -118,6 +118,20 @@ class SummarizeTest(unittest.TestCase):
         self.assertIsNone(summary["date_range"]["first"])
         self.assertEqual(summary["closure"]["closed_count"], 0)
 
+    def test_by_week_trailing_and_hotspots(self):
+        by_week = self.summary["by_week"]
+        self.assertTrue(all(key.startswith("2026-W") for key in by_week))
+        self.assertEqual(sum(by_week.values()), 12)
+        self.assertEqual(next(iter(self.summary["hotspots"])), "רחוב הדוגמה 1")
+        self.assertIsNone(self.summary["by_neighborhood"])
+
+    def test_neighborhood_mapping(self):
+        mapping = {"רחוב הדוגמה": "שכונת הדוגמה", "שדרות הבדיקה": "שכונת הבדיקה"}
+        summary = summarize(self.incidents, neighborhoods=mapping)
+        areas = summary["by_neighborhood"]
+        self.assertEqual(areas["שכונת הדוגמה"], 6)
+        self.assertEqual(areas["(אחר)"], 4)
+
     def test_top_streets_limit(self):
         summary = summarize(self.incidents, top_streets=2)
         self.assertEqual(len(summary["by_street"]), 2)
