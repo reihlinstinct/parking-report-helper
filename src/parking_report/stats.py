@@ -214,15 +214,11 @@ def _report_groups(rows: list[dict[str, str | None]]) -> int:
 
     Union-find over folder_id and municipal_ref (a report may first be
     recorded with only a folder_id and later gain its municipal_ref).
-    Rows lacking both identifiers dedupe on (filed_date, street) so
-    identical re-recordings cannot inflate the count; that can merge two
-    genuinely distinct same-day reports, which undercounts - the safe
-    direction for a public threshold.
+    Callers must exclude rows lacking both identifiers before calling.
     """
     parent = list(range(len(rows)))
     by_folder: dict[str, int] = {}
     by_ref: dict[str, int] = {}
-    by_fallback: dict[tuple[str, str], int] = {}
     for i, row in enumerate(rows):
         folder = (row.get("folder_id") or "").strip()
         ref = (row.get("municipal_ref") or "").strip()
@@ -236,27 +232,22 @@ def _report_groups(rows: list[dict[str, str | None]]) -> int:
                 _union(parent, i, by_ref[ref])
             else:
                 by_ref[ref] = i
-        if not folder and not ref:
-            key = (
-                (row.get("filed_date") or "").strip(),
-                (row.get("street") or "").strip(),
-            )
-            if key in by_fallback:
-                _union(parent, i, by_fallback[key])
-            else:
-                by_fallback[key] = i
     return len({_find(parent, i) for i in range(len(rows))})
 
 
 def plates_summary(
     ledger_path: str | Path, *, min_count: int = 3
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], int]:
     """Repeat-plate aggregate from the private filing ledger.
 
-    The ledger never leaves the machine; only this thresholded aggregate
-    (plate, count) may be published. Reports are deduplicated by shared
-    identifiers (see _report_groups) so a case recorded twice does not
-    inflate a plate past the threshold. Rows without a plate are skipped.
+    Returns (rows, skipped_unidentified). The ledger never leaves the
+    machine; only the thresholded aggregate (plate, count) may be
+    published. Reports are deduplicated by shared identifiers (see
+    _report_groups) so a case recorded twice does not inflate a plate
+    past the threshold. Rows without a plate, and rows lacking BOTH
+    identifiers (folder_id and municipal_ref), are excluded from the
+    counts - an unidentifiable copy of an identified report must not be
+    able to push a plate past the threshold.
     """
     with open(ledger_path, encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -268,12 +259,19 @@ def plates_summary(
             )
         by_plate: dict[str, list[dict[str, str | None]]] = {}
         spellings: dict[str, dict[str, int]] = {}
+        skipped = 0
         for row in reader:
             plate = (row.get("plate") or "").strip()
             # Group by the separator-free key: "440-57-403" and "44057403"
             # are the same vehicle.
             key = re.sub(r"[-\s]", "", plate)
             if not key:
+                continue
+            if (
+                not (row.get("folder_id") or "").strip()
+                and not (row.get("municipal_ref") or "").strip()
+            ):
+                skipped += 1
                 continue
             by_plate.setdefault(key, []).append(row)
             spellings.setdefault(key, {}).setdefault(plate, 0)
@@ -290,7 +288,7 @@ def plates_summary(
             display = max(spellings[key].items(), key=lambda kv: (kv[1], kv[0]))[0]
         rows.append({"plate": display, "reports": count})
     rows.sort(key=lambda r: (-r["reports"], r["plate"]))
-    return rows
+    return rows, skipped
 
 
 def summarize(

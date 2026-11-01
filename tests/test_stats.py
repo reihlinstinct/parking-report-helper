@@ -268,7 +268,7 @@ class PlatesSummaryTest(unittest.TestCase):
                     ("2026-10-09", "", "2601-000011"),  # no plate: skipped
                 ],
             )
-            rows = plates_summary(ledger)
+            rows, _ = plates_summary(ledger)
         self.assertEqual(
             rows,
             [
@@ -291,9 +291,8 @@ class PlatesSummaryTest(unittest.TestCase):
                     ("2026-10-03", "1122233", "2601-000003"),
                 ],
             )
-            self.assertEqual(
-                plates_summary(ledger), [{"plate": "11-222-33", "reports": 3}]
-            )
+            rows, _ = plates_summary(ledger)
+            self.assertEqual(rows, [{"plate": "11-222-33", "reports": 3}])
 
     def test_missing_plate_column_is_a_loud_error(self):
         import tempfile
@@ -330,11 +329,10 @@ class PlatesSummaryTest(unittest.TestCase):
                 "2026-10-02,1122233,folder-b,2601-000002\n",
                 encoding="utf-8",
             )
-            self.assertEqual(
-                plates_summary(path, min_count=2),
-                [{"plate": "11-222-33", "reports": 2}],
-            )
-            self.assertEqual(plates_summary(path), [])
+            rows, _ = plates_summary(path, min_count=2)
+            self.assertEqual(rows, [{"plate": "11-222-33", "reports": 2}])
+            rows, _ = plates_summary(path)
+            self.assertEqual(rows, [])
 
     def test_id_chain_across_rows_is_one_report(self):
         # folder-only row + bridging row + ref-only row: one report.
@@ -349,37 +347,31 @@ class PlatesSummaryTest(unittest.TestCase):
                 "2026-10-01,1122233,,2601-000001\n",
                 encoding="utf-8",
             )
-            self.assertEqual(
-                plates_summary(path, min_count=1),
-                [{"plate": "11-222-33", "reports": 1}],
-            )
+            rows, _ = plates_summary(path, min_count=1)
+            self.assertEqual(rows, [{"plate": "11-222-33", "reports": 1}])
 
-    def test_identical_rows_without_any_id_dedupe_conservatively(self):
-        # Reviewer edge case: three identical rows with both IDs missing
-        # must not count as 3.
+    def test_rows_without_any_id_are_excluded(self):
+        # Reviewer blocker: an id-less copy of an identified report must
+        # not inflate the count - exclude id-less rows entirely and
+        # report how many were skipped.
         import tempfile
 
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "ledger.csv"
             path.write_text(
-                "filed_date,plate,street\n"
-                "2026-10-01,1122233,רחוב בדיקה\n"
-                "2026-10-01,1122233,רחוב בדיקה\n"
-                "2026-10-01,1122233,רחוב בדיקה\n",
+                "filed_date,plate,folder_id,municipal_ref,street\n"
+                "2026-10-01,1122233,folder-a,2601-000001,רחוב בדיקה\n"
+                "2026-10-02,1122233,folder-b,2601-000002,רחוב בדיקה\n"
+                "2026-10-01,1122233,,,רחוב בדיקה\n"  # id-less copy: excluded
+                "2026-10-01,1122233,,,רחוב בדיקה\n",
                 encoding="utf-8",
             )
-            self.assertEqual(plates_summary(path), [])
-            # different days do count separately
-            path.write_text(
-                "filed_date,plate,street\n"
-                "2026-10-01,1122233,רחוב בדיקה\n"
-                "2026-10-02,1122233,רחוב בדיקה\n"
-                "2026-10-03,1122233,רחוב אחרת\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                plates_summary(path), [{"plate": "11-222-33", "reports": 3}]
-            )
+            rows, skipped = plates_summary(path, min_count=2)
+            self.assertEqual(rows, [{"plate": "11-222-33", "reports": 2}])
+            self.assertEqual(skipped, 2)
+            # id-less rows alone can never qualify a plate
+            rows, skipped = plates_summary(path, min_count=3)
+            self.assertEqual(rows, [])
 
     def test_min_count_is_configurable(self):
         import tempfile
@@ -392,5 +384,7 @@ class PlatesSummaryTest(unittest.TestCase):
                     ("2026-10-02", "1122233", "2601-000002"),
                 ],
             )
-            self.assertEqual(plates_summary(ledger), [])
-            self.assertEqual(len(plates_summary(ledger, min_count=2)), 1)
+            rows, _ = plates_summary(ledger)
+            self.assertEqual(rows, [])
+            rows, _ = plates_summary(ledger, min_count=2)
+            self.assertEqual(len(rows), 1)

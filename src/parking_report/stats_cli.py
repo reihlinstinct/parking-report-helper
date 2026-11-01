@@ -77,10 +77,16 @@ def run(argv: list[str]) -> int:
     plate_rows: list[dict] = []
     if args.plates_ledger:
         try:
-            plate_rows = plates_summary(args.plates_ledger)
+            plate_rows, skipped_ids = plates_summary(args.plates_ledger)
         except (OSError, StatsError) as exc:
             print(f"{PROG}: --plates-ledger: {exc}", file=sys.stderr)
             return 1
+        if skipped_ids:
+            print(
+                f"{PROG}: --plates-ledger: {skipped_ids} row(s) without "
+                "identifiers excluded from the plate counts",
+                file=sys.stderr,
+            )
     summary["repeat_plates_count"] = len(plate_rows)
 
     out_dir = Path(args.output)
