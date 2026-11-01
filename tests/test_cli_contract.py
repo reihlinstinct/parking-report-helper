@@ -182,7 +182,7 @@ class ExitCodeTest(unittest.TestCase):
 
     def test_parking_report_106_exit_codes_and_fixed_blocked_line(self) -> None:
         spec = self.contract["parking-report-106"]
-        self.assertEqual(set(spec["exit_codes"]), {"0", "2", "4"})
+        self.assertEqual(set(spec["exit_codes"]), {"0", "2", "4", "5"})
         self.assertEqual(run(api_cli.main, [])[0], 2)
         with TemporaryDirectory() as tmp, patch.dict("os.environ", {}, clear=True):
             code, out, err = run(
@@ -211,7 +211,7 @@ class ExitCodeTest(unittest.TestCase):
 
     def test_parking_report_http_invalid_config_exits_with_fixed_message(self) -> None:
         spec = self.contract["parking-report-http"]
-        self.assertEqual(set(spec["exit_codes"]), {"1"})
+        self.assertEqual(set(spec["exit_codes"]), {"0", "1"})
         cases = ({}, {"PARKING_HTTP_TOKEN": "x" * 32, "PORT": "70000"})
         for env in cases:
             with (
@@ -228,7 +228,9 @@ class ExitCodeTest(unittest.TestCase):
 
     def test_parking_report_http_ignores_extra_argv(self) -> None:
         spec = self.contract["parking-report-http"]
-        self.assertEqual(spec["argv"], "ignored (not parsed, not rejected)")
+        self.assertEqual(
+            spec["argv"], "ignored (not parsed, not rejected), except -h/--help"
+        )
         env = {"PARKING_HTTP_TOKEN": "z" * 32, "PORT": "10001"}
         argv = ["parking-report-http", "--no-such-flag", "extra"]
         with (
@@ -320,6 +322,17 @@ class SuccessOutputTest(unittest.TestCase):
         self.assertEqual(sorted(line), sorted(self.keys["submit"]))
         self.assertEqual(line["status"], "submitted")
         self.assertEqual(err, "")
+
+
+class VersionSyncTest(unittest.TestCase):
+    def test_dunder_version_matches_metadata_and_contract(self) -> None:
+        import parking_report
+
+        self.assertEqual(
+            parking_report.__version__,
+            metadata.version("parking-report-helper"),
+        )
+        self.assertEqual(parking_report.__version__, load_contract()["package_version"])
 
 
 def github_anchor(heading: str) -> str:

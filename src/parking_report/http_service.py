@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import hmac
 import json
 import os
-from collections.abc import Callable, Mapping
+import sys
+from collections.abc import Callable, Mapping, Sequence
 from threading import Lock
 from typing import Any
 from wsgiref.simple_server import WSGIRequestHandler, make_server
@@ -119,7 +121,32 @@ class QuietHandler(WSGIRequestHandler):
         super().handle()
 
 
-def main() -> None:
+_HELP_EPILOG = """\
+environment:
+  PARKING_HTTP_TOKEN  private bearer token, at least 32 characters (required)
+  PORT                TCP port to listen on, 1-65535 (default 10000)
+
+Serves the login-only adapter on 0.0.0.0:PORT until stopped. Other
+command-line arguments are ignored. An invalid configuration exits 1 with a
+fixed message and no exception text. See docs/HTTP106.md."""
+
+
+def _help_text() -> str:
+    """Help for -h/--help; built without reading configuration."""
+    return argparse.ArgumentParser(
+        prog="parking-report-http",
+        description=__doc__,
+        epilog=_HELP_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    ).format_help()
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = sys.argv[1:] if argv is None else list(argv)
+    if "-h" in args or "--help" in args:
+        # Before any configuration is read or a socket is bound (#188).
+        sys.stdout.write(_help_text())
+        raise SystemExit(0)
     try:
         app = Service(os.environ)
         port = int(os.environ.get("PORT", "10000"))
