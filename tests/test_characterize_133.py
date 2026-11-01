@@ -230,7 +230,12 @@ class TestMonthlyDraftValidation(unittest.TestCase):
                 self.assertRejects("Invalid month", [], month)
 
     def test_month_out_of_range(self):
-        self.assertRejects("month must be in 1..12", [], "2026-13")
+        # 3.15 appends ", not 13" to the stdlib month-range error; accept both,
+        # anchored so the repo's own messages stay exactly pinned elsewhere.
+        with self.assertRaisesRegex(
+            ValueError, r"^month must be in 1\.\.12(, not \d+)?$"
+        ):
+            monthly_draft([], "2026-13")
 
     def test_month_checked_before_rows(self):
         self.assertRejects("Invalid month", [{"bad": "row"}], "2026-1")
