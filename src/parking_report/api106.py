@@ -238,6 +238,16 @@ class Addresses:
                     raise InputError(
                         "The supplied address is more than 200 m from the photo GPS. Check the address."
                     )
+                # An exact official name can still be the wrong street. If the
+                # requested house is missing, check every known point on that
+                # street instead of silently accepting arbitrary GPS (#270).
+                street_points = [p for p in self.points if p[3] == code]
+                if not points and street_points and min(
+                    math.hypot(p[0] - x, p[1] - y) for p in street_points
+                ) > 200:
+                    raise InputError(
+                        "The supplied street is more than 200 m from the photo GPS. Check the street."
+                    )
                 source = "photo_gps"
             else:
                 if not points:
