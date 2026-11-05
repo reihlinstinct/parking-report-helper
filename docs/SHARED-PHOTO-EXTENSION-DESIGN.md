@@ -26,6 +26,25 @@ No general migration, arbitrary group growth, non-vehicle reuse or live test
 submissions are in scope. An approval reference records evidence; the caller
 must recover and verify that evidence independently before any live use.
 
+## Logical duplicate identity and privacy
+
+The logical distinction is `(original photo hash, verified vehicle plate)`:
+two distinct verified vehicles may share an original, but a renamed intake for
+the same pair remains blocked. This is a semantic identity rule, not permission
+and not an instruction to persist a plate-derived hash. Private record checks
+establish the distinct plates; the durable bounded parent/child relation blocks
+replay without putting plates in the ledger.
+
+A plain plate hash is guessable over the small plate space. Combining it with
+a known original photo hash or a public salt does not remove that risk. A
+private-key HMAC could hide it but introduces key management, rotation and
+cross-run migration complexity not needed for one bounded extension. Do not
+add one in this feature. Public helper repositories contain code and synthetic
+tests only; the operational ledger is private, but still keeps plate-derived
+values out as defense in depth. Neither the key nor the relation alone proves
+that a different plate is visible, or permits altered/cropped evidence to evade
+source-photo duplicate protection.
+
 ## Proposed private manifest
 
 A new `shared_photo_extension` field on the new record carries exactly:
