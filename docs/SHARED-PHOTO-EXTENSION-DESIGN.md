@@ -29,37 +29,56 @@ must recover and verify that evidence independently before any live use.
 
 ## Duplicate guard identity and privacy
 
-The owner-selected guard identity is a domain-separated SHA256 of the original
-photo SHA256 and strictly normalized vehicle plate. Encode the tuple as canonical
-UTF-8 JSON with fixed field names, sorted keys and fixed compact separators:
-`{domain: parking-report/photo-vehicle/v1, photo_sha256: ..., plate: ...}`.
-Hash that canonical encoding; do not concatenate ambiguous variable-length text.
-The concrete JSON keys and domain string are a versioned contract covered by
-synthetic test vectors. Preserve leading zeros and canonicalize standard plate
-formatting before computing the key.
+The owner-selected guard identity is HMAC-SHA256 with a secret seed over a
+domain-separated tuple of original photo SHA256 and strictly normalized plate.
+Encode the tuple as canonical UTF-8 JSON with fixed fields, sorted keys and
+compact separators: `domain`, `key_id`, `photo_sha256`, `plate`. The domain is
+`parking-report/photo-vehicle/v1`. Preserve leading zeros and canonicalize
+standard plate formatting. Synthetic test vectors pin encoding and output.
 
-Store this derived key only in the PRIVATE operational ledger, in an optional
-additive index from key to hashed intake ID. The public helper repository contains
-code, design and synthetic tests only. No real plate, original photo hash,
-derived guard key or reporter information belongs in public fixtures or logs.
-The parent/child relationship remains plate-free. This intentionally changes the
-previous no-derived-plate-values rule for this private index only; it does not
-relax public output or diagnostics privacy.
+The seed belongs in a GitHub Actions Secret in the PRIVATE reports environment,
+not a GitHub Variable, source, ledger, logs, diagnostics or artifacts. The caller
+supplies it only at runtime. This design neither creates nor sets the secret;
+seed provisioning needs a separate owner-approved step. Public helper tests use
+synthetic seeds only, never the production secret or real evidence.
 
-Same original plus same plate is blocked under any different intake ID; unchanged
-same-ID retries resume. Same original plus a different verified plate can be
-reserved only within the one-extension bound and all parent-binding checks below.
-A key alone is not proof that the plate is visible or that the target is distinct.
-Neither changing a plate string nor cropping/re-encoding the source may be used
-to evade the source-photo identity and evidence checks.
+Store only `(key_id, derived guard key) -> hashed intake ID` in an optional
+private-ledger index. The index carries an immutable key version and a keyed,
+domain-separated verification value for a fixed public check string. Verify that
+value in constant time before reservation. A missing, invalid, unknown-key-id or
+mismatched seed fails closed before any ledger change or municipal effect. The
+verification value is not the seed and must never be treated as one.
 
-Residual risk: a person with the private ledger and original photo hash can guess
-candidate plates from the small plate space. SHA256 is not encryption; domain
-separation and a public salt do not prevent guessing. A private secret salt/HMAC
-would improve resistance, but adds secret custody, rotation, cross-run consistency
-and migration failure cases. Recommendation for this bounded feature: do not add
-that machinery now. Keep the ledger private and diagnostics plate-free; revisit
-HMAC as a separately reviewed privacy change if the exposure model changes.
+Same original plus same plate under the same key version is blocked for a new
+intake ID; unchanged same-ID retries resume. A different verified plate is allowed
+only within the one-extension bound and all parent-binding checks. Public output
+and parent/child relations remain plate-free and contain no derived guard key.
+A key alone does not prove a plate is visible or permit cropping/re-encoding to
+evade original-source duplicate protection.
+
+## Seed lifecycle and ledger compatibility
+
+No production entries for this feature exist yet. Existing v1 ordinary entries
+remain untouched and continue their photo-only protection. Initialize the optional
+index with one explicitly provisioned key ID and its verification value only in
+a reviewed provisioning operation, never opportunistically on a live submission.
+Legacy parent eligibility still requires the corroboration below; absence of a
+new guard entry is not permission to reuse arbitrary old photos.
+
+Do not silently re-key when a seed changes. A different key ID is refused by this
+first version. Rotation requires a separate reviewed migration: retain the old
+key until all affected pairs can be recomputed from verified original private
+records, populate the new index while preserving old duplicate coverage, verify
+counts/conflicts and atomic remote acceptance, then explicitly switch the active
+key ID. If original evidence or the old key is unavailable, stop. Implementing
+rotation or automatic migration is outside this feature; version metadata makes
+the future work possible without an unsafe fallback.
+
+HMAC prevents plate enumeration by a ledger reader who lacks the seed. A reader
+with both seed and original photo hash can still guess plates, so keep both seed
+and private data restricted. Secret masking is not a substitute for avoiding
+output. No test, fixture, exception, subprocess argument or artifact may expose
+the production seed. Live seed setup and municipal tests are not part of this PR.
 
 ## Proposed private manifest
 
@@ -151,6 +170,11 @@ Before implementation, add failing regression tests for:
 - Parent record plate diverging from the corroborated payload fails closed.
 - Parent and original photo index stay unchanged; new member digest includes
   the full manifest and its ID.
+- Missing seed, wrong seed, unknown key ID and malformed verification metadata
+  fail before reservation or fake create; no silent initialization or re-keying.
+- No real seed appears in captured logs, diagnostics, exceptions or artifacts;
+  synthetic seeds alone appear in public tests. Existing legacy entries stay
+  unchanged and cannot bypass corroboration by lacking a new guard entry.
 - Same child retries resume; changed relation, renamed child, second extension,
   existing shared group or follow-up cannot add another case.
 - Missing/FIFO/device parent records fail promptly; mismatched private records
@@ -171,8 +195,8 @@ writes are allowed during tests.
 ## Revised review decisions (pending fresh independent review)
 
 - Exactly one extension per ordinary photo is the initial bound.
-- The guard key is the domain-separated hash of original photo hash plus
-  normalized plate, stored only in the private ledger as specified above.
+- The guard key is a versioned domain-separated HMAC of original photo hash
+  plus normalized plate, stored only in the private ledger as specified above.
 - Duplicate identity binds the internal parent intake ID, ledger digest and
   original photo, not the municipal case number. A FIFO reference may remain
   explicitly unverified metadata. It is never upgraded by reuse approval.
