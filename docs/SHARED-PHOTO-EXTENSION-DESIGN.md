@@ -1,6 +1,11 @@
 # Shared photo extension after a completed intake
 
-Proposal for #293. Not implemented. This document grants no live authority.
+- Issue: #293
+- Status: proposal, pending owner sign-off
+- Date: 2026-11-05
+- Base measured: main `1c5c057` (before this proposal)
+
+Not implemented. This document grants no live authority.
 
 ## Existing behavior
 
@@ -45,18 +50,27 @@ variables, not personal examples.
    extension-digest gate. Reject combination with `followup` or `shared_photo`.
 3. Read the parent record from the same fixed sibling layout as #271, using the
    nonblocking regular-file reader from #284. Reject missing, unreadable,
-   non-object or non-regular inputs without hanging.
+   non-object or non-regular inputs without hanging. The new intake folder must
+   sit beside the completed parent folder. A parent outside that layout is
+   ineligible; support would require a future explicit path flag.
 4. Check both actual originals have the declared hash and each record's plate
-   matches the manifest. Check the parent record's submitted digest against
-   `parent_digest`. Parent case association must carry provenance; an unverified
-   FIFO association must remain marked unverified, not upgraded by this feature.
+   matches the manifest. The 106-ledger parent entry is the source of truth for the submission digest;
+   require the parent's private `report.json` to corroborate the same digest.
+   Both must match `parent_digest`. Older parents without a verifiable digest
+   in both sources are ineligible. Parent case association must carry verified
+   provenance. An unverified FIFO association makes the parent ineligible; this
+   feature cannot upgrade that association.
 5. Under the existing ledger lock, verify remote head and parent identity. Parent
    must be complete, ordinary, own the original photo index, and match the exact
    stored digest/photo. An uncertain parent is not complete. Existing children,
-   follow-ups or shared groups block extension until separately reconciled.
+   follow-ups or shared groups make the parent ineligible. Reconciliation is
+   outside the scope of this feature.
 6. Reserve one new intake and a plate-free relation containing the parent key,
    parent digest, photo hash and authority reference. A separate bounded index
-   prevents a second extension of the same original. Parent entries and original
+   prevents a second extension of the same original. The parent key is the hashed
+   intake ID, consistent with #271: it binds the relationship to the immutable
+   ledger identity without copying intake names or plates into the relation.
+   Parent entries and original
    photo index remain byte-for-byte unchanged.
 7. Persist and verify remote acceptance before any municipal effect. Retry with
    the same intake and manifest resumes its checkpoint. A changed relation,
@@ -103,13 +117,16 @@ missing local container runtime is a verification gap, not a passing result.
 CI and independent exact-head review remain merge gates. No live municipal
 writes are allowed during tests.
 
-## Open review decisions
+## Adopted review decisions
 
-- Is one extension per ordinary photo the right initial bound? Proposal: yes.
-- Should a parent with an unverified case mapping be eligible? Proposal: require
-  review of that provenance and preserve it; never infer a verified mapping.
-- Which parent private schema field securely exposes the actual original
-  submission digest? Existing report formats vary. Resolve this before code,
-  fail closed when absent, and never reconstruct from a changed description.
+- Exactly one extension per ordinary photo is the initial bound.
+- An unverified FIFO municipal-reference mapping makes the parent ineligible.
+  A request to report another car does not verify the parent's reference.
+- Parent submission digest comes from its 106-ledger entry and must be
+  corroborated by the private parent record. Both are required; fail closed
+  when either is missing or conflicts. Older ineligible parents are not
+  migrated or reconstructed from changed descriptions.
 
-Until reviewed, use a separate original photo or leave the new report pending.
+Until this design is reviewed and implemented, use a separate original photo
+or leave the new report pending. Even after implementation, these eligibility
+rules still apply; the feature does not promise coverage for every old intake.
