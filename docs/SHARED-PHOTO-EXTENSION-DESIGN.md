@@ -54,7 +54,8 @@ variables, not personal examples.
    non-object or non-regular inputs without hanging. The new intake folder must
    sit beside the completed parent folder. A parent outside that layout is
    ineligible; support would require a future explicit path flag.
-4. Check both actual originals have the declared hash and each record's plate
+4. Require the new record's photo bytes to be identical to the parent's original
+   photo. Check both originals have the declared hash and each record's plate
    matches the manifest. The 106-ledger parent entry is the source of truth for the submission digest;
    require the preserved private submission artifacts to corroborate that digest.
    Accept a recorded `report.json` submission digest or the original unchanged
@@ -63,7 +64,9 @@ variables, not personal examples.
    artifacts must match `parent_digest`. Recompute the payload digest through
    the existing preparation contract with the original photo and original
    reporter inputs; never print or persist those reporter secrets. A saved
-   digest string alone is not sufficient corroboration. Missing original
+   digest string alone is not sufficient corroboration. The corroborated and
+   recomputed payload's plate must equal the parent record's structured plate
+   and the manifest's `parent_plate`; fail closed on divergence. Missing original
    inputs, changed payload or conflicting records make the parent ineligible.
    A municipal reference is optional metadata and does not select the parent.
    Preserve its provenance verbatim, including an unverified FIFO association.
@@ -75,7 +78,8 @@ variables, not personal examples.
    outside the scope of this feature.
 6. Reserve one new intake and a plate-free relation containing the parent key,
    parent digest, photo hash and authority reference. A separate bounded index
-   prevents a second extension of the same original. The parent key is the hashed
+   prevents a second extension of the same original. This index is additive and
+   optional, keeping ledger version 1 as `shared_photos` did. The parent key is the hashed
    intake ID, consistent with #271: it binds the relationship to the immutable
    ledger identity without copying intake names or plates into the relation.
    Parent entries and original
@@ -107,6 +111,7 @@ Before implementation, add failing regression tests for:
 - One completed ordinary parent plus one different plate succeeds; same plate,
   normalized spelling of the same plate, wrong hash/digest and missing
   authority reference fail before any fake create.
+- Parent record plate diverging from the corroborated payload fails closed.
 - Parent and original photo index stay unchanged; new member digest includes
   the full manifest and its ID.
 - Same child retries resume; changed relation, renamed child, second extension,
