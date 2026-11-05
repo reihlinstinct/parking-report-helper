@@ -38,13 +38,16 @@ standard plate formatting. Synthetic test vectors pin encoding and output.
 
 The seed belongs in a GitHub Actions Secret in the PRIVATE reports environment,
 not a GitHub Variable, source, ledger, logs, diagnostics or artifacts. The caller
-supplies it only at runtime. This design neither creates nor sets the secret;
+supplies it only at runtime. At provisioning generate a cryptographically random
+seed of at least 128 bits (256 bits recommended), never a passphrase or reused
+value. Workflows must never pass it into PR-triggered or fork-triggered contexts. This design neither creates nor sets the secret;
 seed provisioning needs a separate owner-approved step. Public helper tests use
 synthetic seeds only, never the production secret or real evidence.
 
 Store only `(key_id, derived guard key) -> hashed intake ID` in an optional
-private-ledger index. The index carries an immutable key version and a keyed,
-domain-separated verification value for a fixed public check string. Verify that
+private-ledger index. The index carries an immutable key version and a keyed verification value
+using the distinct domain `parking-report/photo-vehicle-key-verifier/v1` and a
+fixed public check string. Verify that
 value in constant time before reservation. A missing, invalid, unknown-key-id or
 mismatched seed fails closed before any ledger change or municipal effect. The
 verification value is not the seed and must never be treated as one.
@@ -53,6 +56,9 @@ Same original plus same plate under the same key version is blocked for a new
 intake ID; unchanged same-ID retries resume. A different verified plate is allowed
 only within the one-extension bound and all parent-binding checks. Public output
 and parent/child relations remain plate-free and contain no derived guard key.
+This creates one intentional PRIVATE-index exception to #283's rule that the
+ledger holds nothing derived from plates; update SHARED-PHOTO.md accordingly
+when implementing, without relaxing that rule for any public output.
 A key alone does not prove a plate is visible or permit cropping/re-encoding to
 evade original-source duplicate protection.
 
@@ -137,8 +143,10 @@ variables, not personal examples.
    optional, keeping ledger version 1 as `shared_photos` did. The parent key is the hashed
    intake ID, consistent with #271: it binds the relationship to the immutable
    ledger identity without copying intake names or plates into the relation.
-   Parent entries and original
-   photo index remain byte-for-byte unchanged.
+   The authorized child reservation is exempt from the original-photo index's
+   single-intake refusal for this exact photo only; that index keeps pointing
+   to the completed parent. Parent entries and original photo index remain
+   byte-for-byte unchanged.
 7. Persist and verify remote acceptance before any municipal effect. Retry with
    the same intake and manifest resumes its checkpoint. A changed relation,
    renamed intake, different photo or second target fails closed.
