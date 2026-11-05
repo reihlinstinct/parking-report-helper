@@ -3,7 +3,7 @@
 - Issue: #293
 - Status: proposal, pending owner sign-off
 - Date: 2026-11-05
-- Base measured: main `1c5c057` (before this proposal)
+- Base measured: main `efda4ca3ca87e3002fea0eddba46b844114a157b` (reviewed baseline #294)
 
 Not implemented. This document grants no live authority.
 
@@ -32,7 +32,8 @@ A new `shared_photo_extension` field on the new record carries exactly:
 
 - `parent_id`: opaque existing intake folder name.
 - `parent_digest`: existing payload digest.
-- `parent_case_number`: independently grounded municipal reference.
+- No municipal case number in the manifest: municipal numbering is metadata,
+  not duplicate identity.
 - `photo_sha256`: unchanged original hash.
 - `parent_plate` and `plate`: distinct strictly normalized standard plates.
 - `authority_reference`: caller-verified approval evidence reference.
@@ -55,11 +56,18 @@ variables, not personal examples.
    ineligible; support would require a future explicit path flag.
 4. Check both actual originals have the declared hash and each record's plate
    matches the manifest. The 106-ledger parent entry is the source of truth for the submission digest;
-   require the parent's private `report.json` to corroborate the same digest.
-   Both must match `parent_digest`. Older parents without a verifiable digest
-   in both sources are ineligible. Parent case association must carry verified
-   provenance. An unverified FIFO association makes the parent ineligible; this
-   feature cannot upgrade that association.
+   require the preserved private submission artifacts to corroborate that digest.
+   Accept a recorded `report.json` submission digest or the original unchanged
+   `municipal-payload.json` digest plus its saved submitted payload, matching the
+   report description and subject/address fields. Both the ledger and preserved
+   artifacts must match `parent_digest`. Recompute the payload digest through
+   the existing preparation contract with the original photo and original
+   reporter inputs; never print or persist those reporter secrets. A saved
+   digest string alone is not sufficient corroboration. Missing original
+   inputs, changed payload or conflicting records make the parent ineligible.
+   A municipal reference is optional metadata and does not select the parent.
+   Preserve its provenance verbatim, including an unverified FIFO association.
+   This feature must never upgrade it to owner-attested or city-verified.
 5. Under the existing ledger lock, verify remote head and parent identity. Parent
    must be complete, ordinary, own the original photo index, and match the exact
    stored digest/photo. An uncertain parent is not complete. Existing children,
@@ -97,7 +105,7 @@ flowchart TD
 Before implementation, add failing regression tests for:
 
 - One completed ordinary parent plus one different plate succeeds; same plate,
-  normalized spelling of the same plate, wrong hash/digest/case and missing
+  normalized spelling of the same plate, wrong hash/digest and missing
   authority reference fail before any fake create.
 - Parent and original photo index stay unchanged; new member digest includes
   the full manifest and its ID.
@@ -117,15 +125,20 @@ missing local container runtime is a verification gap, not a passing result.
 CI and independent exact-head review remain merge gates. No live municipal
 writes are allowed during tests.
 
-## Adopted review decisions
+## Revised review decisions (pending fresh independent review)
 
 - Exactly one extension per ordinary photo is the initial bound.
-- An unverified FIFO municipal-reference mapping makes the parent ineligible.
-  A request to report another car does not verify the parent's reference.
-- Parent submission digest comes from its 106-ledger entry and must be
-  corroborated by the private parent record. Both are required; fail closed
-  when either is missing or conflicts. Older ineligible parents are not
-  migrated or reconstructed from changed descriptions.
+- Duplicate identity binds the internal parent intake ID, ledger digest and
+  original photo, not the municipal case number. A FIFO reference may remain
+  explicitly unverified metadata. It is never upgraded by reuse approval.
+- Require explicit owner approval to use that exact unchanged original for the
+  separately identified new car while leaving the parent untouched. The owner
+  is approving the new action, not certifying an unknown municipal mapping.
+- Parent digest comes from the 106-ledger entry, corroborated against preserved
+  original private submission artifacts and recomputed original inputs. No
+  retrospective field added to a parent can stand in for that evidence.
+- Missing/conflicting original evidence still fails closed. This is not a
+  migration and creates no general exception for every old intake.
 
 Until this design is reviewed and implemented, use a separate original photo
 or leave the new report pending. Even after implementation, these eligibility
