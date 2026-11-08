@@ -13,13 +13,20 @@ import sys
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "tools" / "gemini_review.py"
-spec = importlib.util.spec_from_file_location("gemini_review", SCRIPT)
-gemini_review = importlib.util.module_from_spec(spec)
-sys.modules["gemini_review"] = gemini_review
-spec.loader.exec_module(gemini_review)
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "tools" / "gemini_review.py"
+# The Docker test stage copies tests/ without tools/, like the other
+# guards here: skip cleanly there instead of failing test discovery.
+if SCRIPT.is_file():
+    spec = importlib.util.spec_from_file_location("gemini_review", SCRIPT)
+    gemini_review = importlib.util.module_from_spec(spec)
+    sys.modules["gemini_review"] = gemini_review
+    spec.loader.exec_module(gemini_review)
+else:
+    gemini_review = None
 
 
+@unittest.skipIf(gemini_review is None, "tools/ is not in the Docker test stage")
 class SanitizeModelOutputTest(unittest.TestCase):
     def sanitize(self, text, limit=600):
         return gemini_review.sanitize_model_output(text, limit)
@@ -64,6 +71,7 @@ class SanitizeModelOutputTest(unittest.TestCase):
         self.assertLessEqual(len(self.sanitize("y" * 2000)), 600)
 
 
+@unittest.skipIf(gemini_review is None, "tools/ is not in the Docker test stage")
 class AddedLinesTest(unittest.TestCase):
     DIFF = (
         "diff --git a/real.py b/real.py\n"
