@@ -9,8 +9,9 @@ or a verified mapping from photos to codes. Category codes are not subject codes
 The read contract for a live refresh (method, token placement, response shape,
 flattening and fingerprint comparison) is documented and verified in
 [API106.md](API106.md); a 2026-11-08 read-only check found the live catalog
-identical in codes and paths to this snapshot. Refreshing the snapshot is a
-reviewed change, not an automatic step.
+covering exactly the same codes as this snapshot, with one whitespace-only
+name difference (code 1291). Refreshing the snapshot is a reviewed change,
+not an automatic step.
 
 Example, synthetic non-vehicle event:
 

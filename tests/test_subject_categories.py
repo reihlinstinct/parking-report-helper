@@ -115,6 +115,7 @@ class SubjectCategoryTransportTests(unittest.TestCase):
             request.headers.get("Ocp-apim-subscription-key"), "synthetic-key"
         )
         self.assertEqual(request.headers.get("User-agent"), "App 106")
+        self.assertEqual(request.headers.get("Content-type"), "text/plain")
 
     def test_success_returns_raw_nodes(self):
         result = self.call(Opener(tree()))
@@ -144,6 +145,15 @@ class SubjectCategoryTransportTests(unittest.TestCase):
     def test_non_dict_nodes_rejected(self):
         with self.assertRaises(APIError):
             self.call(Opener([["not", "a", "dict"]]))
+
+    def test_over_16mb_response_rejected(self):
+        class BigOpener(Opener):
+            def open(self, request, timeout):
+                self.requests.append((request, timeout))
+                return io.BytesIO(b" " * (16 * 1024 * 1024 + 2))
+
+        with self.assertRaises(APIError):
+            self.call(BigOpener())
 
     def test_invalid_token_rejected(self):
         for token in ("", None, 42, "has space", "x" * 4097, "tab\ttoken"):
@@ -178,6 +188,8 @@ class FlattenCategoryTreeTests(unittest.TestCase):
             [{"categoryName": "א", "subjectCode": 1145}],
             [{"categoryName": "א", "subjectCode": "11x"}],
             [{"categoryName": "א", "children": "nope"}],
+            [{"categoryName": "א", "children": 0}],
+            [{"categoryName": "א", "children": False}],
             ["not a dict"],
             "not a list",
             [{"categoryName": "א", "children": [{"subjectCode": "1"}]}],
@@ -186,6 +198,26 @@ class FlattenCategoryTreeTests(unittest.TestCase):
             with self.subTest(payload=payload):
                 with self.assertRaises(ValueError):
                     flatten_category_tree(payload)
+
+    def test_none_children_accepted(self):
+        rows = flatten_category_tree(
+            [{"categoryName": "א", "subjectCode": "1", "children": None}]
+        )
+        self.assertEqual(len(rows), 1)
+
+    def test_deep_tree_fails_closed_as_value_error(self):
+        node = {"categoryName": "עלה", "subjectCode": "1"}
+        for _ in range(11):
+            node = {"categoryName": "רמה", "children": [node]}
+        with self.assertRaises(ValueError):
+            flatten_category_tree([node])
+
+    def test_row_cap_fails_closed(self):
+        nodes = [
+            {"categoryName": "א", "subjectCode": str(100000 + i)} for i in range(10001)
+        ]
+        with self.assertRaises(ValueError):
+            flatten_category_tree(nodes)
 
 
 class CatalogFingerprintTests(unittest.TestCase):

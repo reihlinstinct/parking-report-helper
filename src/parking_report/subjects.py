@@ -10,6 +10,7 @@ from typing import Any
 DEFAULT_SUBJECT = "1145"
 
 _MAX_CATEGORY_ROWS = 10000
+_MAX_CATEGORY_DEPTH = 10
 
 
 def flatten_category_tree(nodes: Any) -> list[dict[str, Any]]:
@@ -28,14 +29,14 @@ def flatten_category_tree(nodes: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _flatten_node(
-    node: Any, path: list[str], rows: list[dict[str, Any]]
-) -> None:
+def _flatten_node(node: Any, path: list[str], rows: list[dict[str, Any]]) -> None:
+    if len(path) >= _MAX_CATEGORY_DEPTH:
+        raise ValueError("Category tree is too deep")
     if not isinstance(node, dict):
         raise ValueError("Category node must be an object")  # noqa: TRY004 - malformed input data; callers catch ValueError
     name = node.get("categoryName")
     code = node.get("subjectCode")
-    children = node.get("children") or []
+    children = node.get("children")
     if (
         not isinstance(name, str)
         or not name.strip()
@@ -43,14 +44,14 @@ def _flatten_node(
             code is not None
             and not (isinstance(code, str) and code.isascii() and code.isdigit())
         )
-        or not isinstance(children, list)
+        or (children is not None and not isinstance(children, list))
     ):
         raise ValueError("Invalid category node")
     if code is not None:
         rows.append({"code": code, "name": name, "path": path + [name]})
         if len(rows) > _MAX_CATEGORY_ROWS:
             raise ValueError("Category tree is too large")
-    for child in children:
+    for child in children or []:
         _flatten_node(child, path + [name], rows)
 
 
@@ -61,9 +62,7 @@ def catalog_fingerprint(rows: list[dict[str, Any]]) -> str:
     refresh can detect municipal additions, removals and renames.
     """
     items = sorted(
-        json.dumps(
-            [row["code"], row["name"], row["path"]], ensure_ascii=False
-        )
+        json.dumps([row["code"], row["name"], row["path"]], ensure_ascii=False)
         for row in rows
     )
     return hashlib.sha256("\n".join(items).encode("utf-8")).hexdigest()
