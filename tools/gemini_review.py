@@ -54,6 +54,9 @@ BOT_LOGIN = "github-actions[bot]"
 SUMMARY_MAX_CHARS = 600
 COMMENT_MAX_CHARS = 1000
 
+# Best-effort nicety, not a control: exact phrases only, and variants
+# (L.G.T.M, approved, ready-to-merge) still get through. The review is
+# advisory either way and the body says so.
 ENDORSEMENT = re.compile(
     r"\b(safe to merge|ready to merge|good to merge|lgtm|"
     r"looks good to me)\b",
@@ -72,7 +75,9 @@ class QuotaExceeded(Exception):
 
 
 MARKDOWN_SPECIALS = re.compile(r"([\\`*_\[\]<>()|~#])")
-AUTOLINK = re.compile(r"(?i)\b(?:https?|ftp)://|\bwww\.")
+# No word boundaries: `_https://`, `1https://` and `éhttps://` must
+# break too, because cmark-gfm autolinks a scheme after any prefix.
+AUTOLINK = re.compile(r"(?i)(?:https?|ftp)://|www\.")
 ENTITY_AT = re.compile(r"(?i)&#0*64;|&#x0*40;|&commat;")
 
 
@@ -309,7 +314,7 @@ def already_reviewed(reviews: object, head_sha: str) -> bool:
         if (
             isinstance(review, dict)
             and review.get("commit_id") == head_sha
-            and review.get("user", {}).get("login") == BOT_LOGIN
+            and (review.get("user") or {}).get("login") == BOT_LOGIN
             and str(review.get("body", "")).startswith(REVIEW_MARKER)
         ):
             return True
