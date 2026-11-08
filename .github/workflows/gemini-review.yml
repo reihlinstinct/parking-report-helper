@@ -19,8 +19,15 @@ permissions:
   contents: read
   pull-requests: write
 
+# A manual dispatch must not overlap a scheduled run: both would check
+# already-reviewed before either posts and could double-review a head.
+concurrency:
+  group: gemini-review
+  cancel-in-progress: false
+
 jobs:
   gemini-review:
+    timeout-minutes: 10
     # Public repositories only: PR diffs are sent to the Gemini API, and
     # private repository content must never leave GitHub. On a private
     # repository this job skips instead of failing.
