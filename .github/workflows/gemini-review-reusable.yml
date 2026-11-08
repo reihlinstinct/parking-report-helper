@@ -1,0 +1,30 @@
+name: Gemini code review (reusable)
+
+on:
+  workflow_call:
+    secrets:
+      GEMINI_API_KEY:
+        required: true
+
+# No top-level or job permissions block: called-workflow jobs inherit the
+# caller job's grants (contents: read + pull-requests: write here), and a
+# called workflow can downgrade, never elevate. Keep the caller minimal.
+
+jobs:
+  gemini-review:
+    # Public repositories only: the pull request diff is sent to the Gemini
+    # API, and private repository content must never leave GitHub. A caller
+    # copied into a private repository makes this job skip, not fail.
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Advisory Gemini review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: gemini-2.5-flash
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/gemini_review.py

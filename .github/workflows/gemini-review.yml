@@ -1,0 +1,22 @@
+name: Gemini code review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  gemini-review:
+    # Advisory only: posts a COMMENT review, is not a required check, and
+    # the script always exits 0, so this job can never block a merge.
+    # Draft pull requests are skipped; fork pull requests get no secret and
+    # a read-only token, and the script skips them gracefully.
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: ./.github/workflows/gemini-review-reusable.yml
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
