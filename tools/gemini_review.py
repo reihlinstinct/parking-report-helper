@@ -60,6 +60,10 @@ ENDORSEMENT = re.compile(
     re.IGNORECASE,
 )
 
+# Findings may only name paths that could appear in a posted review
+# body: no spaces, backticks or markup characters.
+PATH_CHARS = re.compile(r"[A-Za-z0-9][A-Za-z0-9._~+/=@-]*")
+
 SUMMARY_PATH = os.environ.get("GITHUB_STEP_SUMMARY", "")
 
 
@@ -67,19 +71,37 @@ class QuotaExceeded(Exception):
     """The Gemini quota rejected a request that was already retried."""
 
 
-def sanitize_model_output(text: str, max_chars: int) -> str:
-    """Make model output safe to post as the bot and to write to the log.
+MARKDOWN_SPECIALS = re.compile(r"([\\`*_\[\]<>()|~#])")
+AUTOLINK = re.compile(r"(?i)\b(?:https?|ftp)://|\bwww\.")
+ENTITY_AT = re.compile(r"(?i)&#0*64;|&#x0*40;|&commat;")
 
-    A pull request diff can steer the model into pinging users,
-    embedding links, emitting runner workflow commands (::warning::,
-    ::error::) or endorsing a merge. Neutralize all of that here.
+
+def _break_autolink(match: re.Match) -> str:
+    """Split a URL token with a zero-width space so it cannot autolink."""
+    token = match.group(0)
+    if token.lower().endswith("://"):
+        return token[:-3] + "\u200b://"
+    return token[:3] + "\u200b."  # www.
+
+
+def sanitize_model_output(text: str, max_chars: int) -> str:
+    """Make model output render as plain text, safe to post and to log.
+
+    The diff is untrusted: a pull request can steer the model into
+    pinging users (including HTML-entity forms like &#64;name),
+    embedding markdown or raw-HTML links, emitting runner workflow
+    commands (::warning::, ::error::) or endorsing a merge. This is
+    escape-based: every markdown special character is backslash-escaped
+    so no markup renders, URLs are split with a zero-width space so
+    nothing autolinks (any case, scheme:// or www.), and merge
+    endorsements are replaced with a fixed advisory note.
     """
-    text = re.sub(r"!\[([^\]]*)\]\(([^)]*)\)", r"\1", text)  # images
-    text = re.sub(r"\[([^\]]+)\]\(([^)]*)\)", r"\1 (\2)", text)  # links
-    text = re.sub(r"(https?://)(?=\S)", "\u200b\\1", text)  # autolinks
-    text = re.sub(r"@(?=[A-Za-z0-9])", "@\u200b", text)  # mentions
+    text = ENDORSEMENT.sub("[advisory review - no merge assessment]", text)
+    text = ENTITY_AT.sub("@\u200b", text)  # entity-encoded mentions
+    text = re.sub(r"@(?=[A-Za-z0-9])", "@\u200b", text)  # plain mentions
+    text = AUTOLINK.sub(_break_autolink, text)
+    text = MARKDOWN_SPECIALS.sub(lambda m: "\\" + m.group(1), text)
     text = text.replace("::", ":\u200b:")  # runner workflow commands
-    text = ENDORSEMENT.sub("[no merge assessment: advisory review]", text)
     text = text.strip()
     if len(text) > max_chars:
         text = text[: max_chars - 3].rstrip() + "..."
@@ -141,28 +163,46 @@ def truncate_diff(diff: str, per_file: int, total: int) -> str:
 
 
 def added_lines(diff: str) -> dict[str, set[int]]:
-    """Map each file path to the added (+) line numbers on the RIGHT side."""
+    """Map each file path to the added (+) line numbers on the RIGHT side.
+
+    Paths come only from real ``diff --git a/... b/...`` headers: an
+    added diff line whose text starts with ``++ b/`` looks like a
+    ``+++ b/`` file header and must not plant a fake path that a later
+    review body would render as a live mention or link. Files with
+    quoted or space-containing paths are skipped; this tool is
+    advisory, so losing one file is acceptable.
+    """
     valid: dict[str, set[int]] = {}
-    path: str | None = None
+    pending: str | None = None  # b-path of the last diff --git header
+    path: str | None = None  # file whose hunks are being counted
     new_line = 0
+    header = re.compile(r"^diff --git a/(\S+) b/(\S+)$")
     hunk = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
     for line in diff.splitlines():
-        if line.startswith("+++ b/"):
-            path = line[len("+++ b/") :]
-            valid.setdefault(path, set())
-        elif line.startswith("+++ "):
-            path = None  # /dev/null or unusual header
-        elif path is not None:
-            match = hunk.match(line)
-            if match:
-                new_line = int(match.group(1))
-            elif line.startswith("+"):
-                valid[path].add(new_line)
-                new_line += 1
-            elif line.startswith("-"):
-                pass
-            else:
-                new_line += 1
+        match = header.match(line)
+        if match:
+            pending = match.group(2)
+            path = None
+            continue
+        if path is None:
+            # Between a header and its +++ line only metadata can appear
+            # (index, modes, renames, --- a/...). Anything else, including
+            # a +++ line that does not match the header's b-path, is not
+            # a real file header.
+            if pending is not None and line == "+++ b/" + pending:
+                path = pending
+                valid.setdefault(path, set())
+            continue
+        match = hunk.match(line)
+        if match:
+            new_line = int(match.group(1))
+        elif line.startswith("+"):
+            valid[path].add(new_line)
+            new_line += 1
+        elif line.startswith("-"):
+            pass
+        else:
+            new_line += 1
     return valid
 
 
@@ -249,6 +289,7 @@ def validate_findings(raw: object, valid: dict[str, set[int]], cap: int) -> list
             severity = "medium"
         if (
             isinstance(path, str)
+            and PATH_CHARS.fullmatch(path)
             and isinstance(line, int)
             and comment
             and line in valid.get(path, set())
