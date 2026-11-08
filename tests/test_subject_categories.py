@@ -150,10 +150,20 @@ class SubjectCategoryTransportTests(unittest.TestCase):
         class BigOpener(Opener):
             def open(self, request, timeout):
                 self.requests.append((request, timeout))
-                return io.BytesIO(b" " * (16 * 1024 * 1024 + 2))
+                return self.stream
 
+        class SizedStream(io.BytesIO):
+            def read(self, size=-1):
+                sizes.append(size)
+                return super().read(size)
+
+        sizes = []
+        opener = BigOpener()
+        # A valid JSON prefix: without the length check this would parse as [].
+        opener.stream = SizedStream(b"[]" + b" " * (16 * 1024 * 1024))
         with self.assertRaises(APIError):
-            self.call(BigOpener())
+            self.call(opener)
+        self.assertEqual(sizes, [16 * 1024 * 1024 + 1])
 
     def test_invalid_token_rejected(self):
         for token in ("", None, 42, "has space", "x" * 4097, "tab\ttoken"):
