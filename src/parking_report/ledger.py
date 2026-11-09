@@ -286,6 +286,8 @@ class GitLedger:
             raise LedgerError("Supersedes parent is not an ordinary intake")
         if "superseded_by" in parent:
             raise LedgerError("Supersedes parent is already superseded")
+        if photo_hash in self.data.get("shared_photos", {}):
+            raise LedgerError("Supersedes photo already belongs to a shared pair")
         origin = self.data["photos"].get(photo_hash)
         if not origin or origin not in reports:
             raise LedgerError("Supersedes photo index is missing")
@@ -409,6 +411,7 @@ class GitLedger:
                         "shared_issue",
                         "extension",
                         "supersedes",
+                        "superseded_by",
                     )
                 ):
                     raise LedgerError("Shared-issue origin is not an ordinary intake")
@@ -426,7 +429,9 @@ class GitLedger:
                 ):
                     raise LedgerError("Shared-issue origin already has a follow-up")
                 extensions = self.data.get("photo_vehicle", {}).get("extensions", {})
-                if isinstance(extensions, dict) and photo_hash in extensions:
+                if not isinstance(extensions, dict):
+                    raise LedgerError("Corrupt private extension index")
+                if photo_hash in extensions:
                     raise LedgerError("Shared-issue origin already has an extension")
             self.data.setdefault("shared_photos", {})[photo_hash] = locked
         elif recorded != locked or origin not in group["members"]:

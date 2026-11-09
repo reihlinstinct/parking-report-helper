@@ -25,3 +25,13 @@ second member may join only if the photo's origin intake is named by the
 manifest, is `complete`, and has no other relation. The origin entry, digest,
 state and the photo index are never rewritten. Any other already-claimed
 photo stays refused.
+
+Supersedes cannot combine with a pair in either order: a superseded origin
+cannot late-join, and a photo already locked in `shared_photos` cannot be used
+by a superseding intake (including a late-joined ordinary origin). A malformed
+extension index also refuses late join rather than skipping that guard.
+
+The pre-join child-free rule is deliberately stricter than later follow-ups:
+a follow-up already on the origin prevents late join, but after a pair is
+locked a normal follow-up may continue an existing case, as with vehicle
+pairs. It does not open a third intake/case. All normal follow-up gates apply.

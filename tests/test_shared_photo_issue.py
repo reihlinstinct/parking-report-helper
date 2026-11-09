@@ -442,6 +442,73 @@ class LateJoinRefusalTests(SharedIssueBase):
         git(self.ledger_dir, "commit", "-m", "Test ledger edit")
         git(self.ledger_dir, "push", "origin", "HEAD:106-ledger")
 
+    def supersede_origin(self, a):
+        c = self.issue("issue-c", SIGN, description="טקסט מאושר מתוקן")
+        c.joinpath("photo.jpg").write_bytes(a.joinpath("photo.jpg").read_bytes())
+        parent = self.ledger_data()["reports"][self.key("issue-a")]
+        record = self.record(c)
+        record["supersedes"] = {
+            "parent_id": "issue-a",
+            "parent_digest": parent["digest"],
+            "approval_reference": REFERENCE,
+        }
+        self.write(c, record)
+        digest = self.preview(c)
+        argv = [
+            c,
+            "--addresses",
+            self.addresses,
+            "--ledger-dir",
+            self.ledger_dir,
+            "--state-dir",
+            self.root / "state",
+            "--submit",
+            "--approved-sha256",
+            digest,
+            "--approved-supersedes-sha256",
+            digest,
+        ]
+        with (
+            patch("parking_report.api106.Municipality", FakeMunicipality),
+            patch.object(api_cli, "post_submit_duplicate_check", return_value=[]),
+        ):
+            code, out = self.run_cli(argv, LIVE)
+        return code, json.loads(out)
+
+    def test_supersede_then_late_join_cannot_create_third_intake(self):
+        a = self.complete_origin()
+        code, _ = self.supersede_origin(a)
+        self.assertEqual(code, 0, self.outputs)
+        before = self.ledger_data()
+        self.assertIn("superseded_by", before["reports"][self.key("issue-a")])
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4, self.outputs)
+        self.assertEqual(out["status"], "blocked")
+        self.assertEqual(self.ledger_data(), before)
+        self.assertEqual(len(FakeMunicipality.created), 2)
+
+    def test_late_join_then_supersede_cannot_create_third_intake(self):
+        a = self.complete_origin()
+        code, _ = self.late_join(a)
+        self.assertEqual(code, 0, self.outputs)
+        before = self.ledger_data()
+        self.assertNotIn("shared_issue", before["reports"][self.key("issue-a")])
+        code, out = self.supersede_origin(a)
+        self.assertEqual(code, 4, self.outputs)
+        self.assertEqual(out["status"], "blocked")
+        self.assertEqual(self.ledger_data(), before)
+        self.assertEqual(len(FakeMunicipality.created), 2)
+
+    def test_late_join_refuses_corrupt_extension_index(self):
+        a = self.complete_origin()
+        self.edit_ledger(lambda data: data.update(photo_vehicle={"extensions": []}))
+        before = self.ledger_data()
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4, self.outputs)
+        self.assertEqual(out["status"], "blocked")
+        self.assertEqual(self.ledger_data(), before)
+        self.assertEqual(len(FakeMunicipality.created), 1)
+
     def test_late_join_refused_when_origin_not_complete(self):
         a = self.issue("issue-a", SIGN)
         digest = self.preview(a)
