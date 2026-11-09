@@ -156,7 +156,9 @@ class GitLedger:
         if followup is not None:
             entry["followup"] = followup
         if group is not None:
-            entry["shared_issue" if group.get("kind") == "issue" else "shared_photo"] = group["group"]
+            entry[
+                "shared_issue" if group.get("kind") == "issue" else "shared_photo"
+            ] = group["group"]
         if relation is not None:
             entry["extension"] = relation
         if supersedes is not None:
@@ -187,10 +189,12 @@ class GitLedger:
 
             followup = validate_followup(followup)
         if shared_issue is not None:
-            if followup is not None or shared_photo is not None or extension is not None:
-                raise LedgerError(
-                    "A shared-issue pair cannot combine another relation"
-                )
+            if (
+                followup is not None
+                or shared_photo is not None
+                or extension is not None
+            ):
+                raise LedgerError("A shared-issue pair cannot combine another relation")
             from .shared_issue import group_fingerprint, validate_issue_pair
 
             manifest = validate_issue_pair(shared_issue)
@@ -275,7 +279,10 @@ class GitLedger:
             raise LedgerError("Supersedes parent is not in an open ledger state")
         if digest == parent["digest"]:
             raise LedgerError("Supersedes payload is an exact duplicate of its parent")
-        if any(k in parent for k in ("followup", "shared_photo", "extension")):
+        if any(
+            k in parent
+            for k in ("followup", "shared_photo", "shared_issue", "extension")
+        ):
             raise LedgerError("Supersedes parent is not an ordinary intake")
         if "superseded_by" in parent:
             raise LedgerError("Supersedes parent is already superseded")
@@ -364,7 +371,9 @@ class GitLedger:
         elif recorded != locked or origin not in group["members"]:
             raise LedgerError("Shared-photo group is locked; membership cannot change")
 
-    def _join_issue_group(self, key: str, photo_hash: str, group: dict[str, Any]) -> None:
+    def _join_issue_group(
+        self, key: str, photo_hash: str, group: dict[str, Any]
+    ) -> None:
         """Lock an issue pair, or late-join a completed ordinary origin intake.
 
         Unlike a vehicle pair, the first issue may already be filed as an
@@ -394,9 +403,31 @@ class GitLedger:
                     raise LedgerError("Shared-issue origin is not a completed intake")
                 if any(
                     k in entry
-                    for k in ("followup", "shared_photo", "shared_issue", "extension", "supersedes")
+                    for k in (
+                        "followup",
+                        "shared_photo",
+                        "shared_issue",
+                        "extension",
+                        "supersedes",
+                    )
                 ):
                     raise LedgerError("Shared-issue origin is not an ordinary intake")
+                # Relations recorded outside the origin's own entry also bar
+                # the pair: a follow-up child names the origin as its parent,
+                # and an extension child holds the photo in the private index.
+                if any(
+                    isinstance(e, dict)
+                    and hashlib.sha256(
+                        e.get("followup", {}).get("parent_id", "").encode()
+                    ).hexdigest()
+                    == origin
+                    for e in self.data["reports"].values()
+                    if isinstance(e, dict) and e.get("followup")
+                ):
+                    raise LedgerError("Shared-issue origin already has a follow-up")
+                extensions = self.data.get("photo_vehicle", {}).get("extensions", {})
+                if isinstance(extensions, dict) and photo_hash in extensions:
+                    raise LedgerError("Shared-issue origin already has an extension")
             self.data.setdefault("shared_photos", {})[photo_hash] = locked
         elif recorded != locked or origin not in group["members"]:
             raise LedgerError("Shared-issue group is locked; membership cannot change")

@@ -109,7 +109,12 @@ def _bind_relations(
 
         if any(
             key in record
-            for key in ("followup", "shared_photo", "shared_photo_extension")
+            for key in (
+                "followup",
+                "shared_photo",
+                "shared_photo_extension",
+                "shared_photo_issue",
+            )
         ):
             raise ValueError("A supersedes manifest cannot combine another relation")
         # The manifest and the new intake ID enter the preview digest, so the
@@ -216,7 +221,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         # Follow-up, shared-photo, extension and supersedes previews reserve nothing.
         exception = any(
-            value is not None for value in (followup, shared, issue, extension, supersedes)
+            value is not None
+            for value in (followup, shared, issue, extension, supersedes)
         )
         reserve_ledger = ledger if args.submit or not exception else None
         with reserve_ledger.locked() if reserve_ledger else nullcontext():

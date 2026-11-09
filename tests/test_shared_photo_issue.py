@@ -23,7 +23,6 @@ from synthetic_contact import SYNTHETIC_ID, SYNTHETIC_PHONE
 from parking_report import api_cli
 from parking_report.shared_issue import (
     GROUP_SIZE,
-    canonical_manifest,
     check_sibling,
     group_fingerprint,
     sibling_record_path,
@@ -250,7 +249,9 @@ class ManifestValidationTests(SharedIssueBase):
 
     def test_group_is_bounded_to_exactly_two(self):
         self.assertEqual(GROUP_SIZE, 2)
-        three = self.manifest("b" * 64, ids=["a", "b", "c"], issues=[SIGN, BOLLARD, LIGHT])
+        three = self.manifest(
+            "b" * 64, ids=["a", "b", "c"], issues=[SIGN, BOLLARD, LIGHT]
+        )
         with self.assertRaises(ValueError):
             validate_issue_pair(three)
 
@@ -291,7 +292,9 @@ class SubmissionTests(SharedIssueBase):
         self.assertEqual(origin, self.key("issue-a"))
         group = data["shared_photos"][self.photo_hash(a)]
         self.assertEqual(group["kind"], "issue")
-        self.assertEqual(group["group"], group_fingerprint(validate_issue_pair(manifest)))
+        self.assertEqual(
+            group["group"], group_fingerprint(validate_issue_pair(manifest))
+        )
         self.assertEqual(
             data["reports"][self.key("issue-b")]["shared_issue"], group["group"]
         )
@@ -315,7 +318,7 @@ class SubmissionTests(SharedIssueBase):
         self.assertEqual(data["photos"][self.photo_hash(a)], self.key("issue-a"))
         self.assertIn("shared_issue", data["reports"][self.key("issue-b")])
 
-    def test_late_join_refused_when_origin_not_complete(self):
+    def test_prepared_member_still_locks_the_pair_for_its_sibling(self):
         a, b, manifest = self.pair()
         # Reserve the origin without submitting: preview with a ledger is still
         # reservation-free for members, so reserve by starting a submission
@@ -357,22 +360,21 @@ class SubmissionTests(SharedIssueBase):
 
     def test_photo_belonging_to_another_intake_is_refused(self):
         a, b, manifest = self.pair()
-        stranger = self.issue("issue-c", LIGHT)
+        stranger = self.issue("issue-c", LIGHT, color="black")  # different photo
         code, out = self.run_cli(
             [stranger, "--addresses", self.addresses, "--ledger-dir", self.ledger_dir]
         )
         self.assertEqual(code, 0)  # different photo: an ordinary new intake
-        stranger2 = self.intakes / "issue-d"
-        stranger2.mkdir()
-        Image.new("RGB", (10, 10), "white").save(stranger2 / "photo.jpg")
-        record = self.record(a)
-        del record["shared_photo_issue"]
-        self.write(stranger2, record)
-        code, out = self.run_cli(
-            [stranger2, "--addresses", self.addresses, "--ledger-dir", self.ledger_dir]
-        )
+        # A shared-issue member naming the stranger's photo, whose manifest
+        # does not name the stranger, reaches the shared-issue origin check.
+        a.joinpath("photo.jpg").write_bytes(stranger.joinpath("photo.jpg").read_bytes())
+        stolen = self.manifest(self.photo_hash(stranger))
+        self.attach(a, stolen)
+        self.attach(b, stolen)
+        code, out = self.submit(a)
         self.assertEqual(code, 4)
-        self.assertIn("blocked", out)
+        self.assertEqual(out["status"], "blocked")
+        self.assertEqual(FakeMunicipality.created, [])
 
     def test_live_member_requires_exact_issue_approval(self):
         a, b, manifest = self.pair()
@@ -396,6 +398,187 @@ class SubmissionTests(SharedIssueBase):
         b.joinpath("report.json").unlink()
         with self.assertRaises(ValueError):
             check_sibling(a, manifest)
+
+    def test_sibling_record_with_a_plate_is_refused(self):
+        a, b, manifest = self.pair()
+        record = self.record(b)
+        record["plate"] = "10-000-01"
+        self.write(b, record)
+        with self.assertRaises(ValueError):
+            check_sibling(a, manifest)
+
+    def test_sibling_record_with_a_slot_mismatch_is_refused(self):
+        a, b, manifest = self.pair()
+        record = self.record(b)
+        record["municipal_subject"]["event_type"] = LIGHT
+        self.write(b, record)
+        with self.assertRaises(ValueError):
+            check_sibling(a, manifest)
+
+
+class LateJoinRefusalTests(SharedIssueBase):
+    """The late-join origin must be complete, ordinary and child-free."""
+
+    def complete_origin(self):
+        a = self.issue("issue-a", SIGN)
+        code, _ = self.submit(a, approval=False)
+        self.assertEqual(code, 0, self.outputs)
+        return a
+
+    def late_join(self, a):
+        b = self.issue("issue-b", BOLLARD)
+        b.joinpath("photo.jpg").write_bytes(a.joinpath("photo.jpg").read_bytes())
+        manifest = self.manifest(self.photo_hash(a))
+        self.attach(a, manifest)
+        self.attach(b, manifest)
+        return self.submit(b)
+
+    def edit_ledger(self, edit):
+        path = self.ledger_dir / "ledger.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        edit(data)
+        path.write_text(json.dumps(data), encoding="utf-8")
+        git(self.ledger_dir, "add", ".")
+        git(self.ledger_dir, "commit", "-m", "Test ledger edit")
+        git(self.ledger_dir, "push", "origin", "HEAD:106-ledger")
+
+    def test_late_join_refused_when_origin_not_complete(self):
+        a = self.issue("issue-a", SIGN)
+        digest = self.preview(a)
+        argv = [
+            a,
+            "--addresses",
+            self.addresses,
+            "--ledger-dir",
+            self.ledger_dir,
+            "--state-dir",
+            self.root / "state",
+            "--submit",
+            "--approved-sha256",
+            digest,
+        ]
+        with patch("parking_report.api106.Municipality", side_effect=OSError):
+            code, _ = self.run_cli(argv, LIVE)
+        self.assertEqual(code, 4)
+        self.assertEqual(
+            self.ledger_data()["reports"][self.key("issue-a")]["state"]["status"],
+            "prepared",
+        )
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4)
+        self.assertEqual(out["status"], "blocked")
+
+    def test_late_join_refused_when_origin_entry_carries_a_relation(self):
+        a = self.complete_origin()
+
+        def edit(data):
+            data["reports"][self.key("issue-a")]["followup"] = {
+                "parent_id": "other",
+                "parent_digest": "1" * 64,
+                "parent_case_number": "x",
+            }
+
+        self.edit_ledger(edit)
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4)
+        self.assertEqual(out["status"], "blocked")
+
+    def test_late_join_refused_when_origin_has_a_followup_child(self):
+        a = self.complete_origin()
+
+        def edit(data):
+            data["reports"][self.key("issue-a-followup")] = {
+                "digest": "2" * 64,
+                "photo_sha256": self.photo_hash(a),
+                "state": {"version": 1, "status": "complete"},
+                "followup": {
+                    "parent_id": "issue-a",
+                    "parent_digest": "1" * 64,
+                    "parent_case_number": "x",
+                },
+            }
+
+        self.edit_ledger(edit)
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4)
+        self.assertEqual(out["status"], "blocked")
+
+    def test_late_join_refused_when_origin_photo_has_an_extension(self):
+        a = self.complete_origin()
+
+        def edit(data):
+            data["photo_vehicle"] = {
+                "key": {},
+                "guards": {},
+                "extensions": {self.photo_hash(a): "3" * 64},
+            }
+
+        self.edit_ledger(edit)
+        code, out = self.late_join(a)
+        self.assertEqual(code, 4)
+        self.assertEqual(out["status"], "blocked")
+
+
+class SupersedesGuardTests(SharedIssueBase):
+    def test_prepared_issue_member_cannot_be_superseded(self):
+        a, b, manifest = self.pair()
+        digest = self.preview(a)
+        argv = [
+            a,
+            "--addresses",
+            self.addresses,
+            "--ledger-dir",
+            self.ledger_dir,
+            "--state-dir",
+            self.root / "state",
+            "--submit",
+            "--approved-sha256",
+            digest,
+            "--approved-shared-issue-sha256",
+            digest,
+        ]
+        with patch("parking_report.api106.Municipality", side_effect=OSError):
+            code, _ = self.run_cli(argv, LIVE)
+        self.assertEqual(code, 4)
+        self.assertEqual(
+            self.ledger_data()["reports"][self.key("issue-a")]["state"]["status"],
+            "prepared",
+        )
+        # A corrected re-filing of the prepared member must not escape the pair.
+        c = self.issue("issue-c", SIGN)
+        c.joinpath("photo.jpg").write_bytes(a.joinpath("photo.jpg").read_bytes())
+        record = self.record(c)
+        record["supersedes"] = {
+            "parent_id": "issue-a",
+            "parent_digest": digest,
+            "approval_reference": REFERENCE,
+        }
+        self.write(c, record)
+        digest_c = self.preview(c)
+        argv = [
+            c,
+            "--addresses",
+            self.addresses,
+            "--ledger-dir",
+            self.ledger_dir,
+            "--state-dir",
+            self.root / "state",
+            "--submit",
+            "--approved-sha256",
+            digest_c,
+            "--approved-supersedes-sha256",
+            digest_c,
+        ]
+        with (
+            patch("parking_report.api106.Municipality", FakeMunicipality),
+            patch.object(api_cli, "post_submit_duplicate_check", return_value=[]),
+        ):
+            code, out = self.run_cli(argv, LIVE)
+        self.assertEqual(code, 4)
+        self.assertEqual(json.loads(out)["status"], "blocked")
+        self.assertNotIn(
+            "superseded_by", self.ledger_data()["reports"][self.key("issue-a")]
+        )
 
 
 if __name__ == "__main__":

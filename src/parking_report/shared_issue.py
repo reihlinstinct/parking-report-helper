@@ -121,7 +121,7 @@ def sibling_record_path(folder: Path, manifest: dict[str, Any]) -> Path:
     return folder.parent / others[0] / "report.json"
 
 
-def _sibling_manifest(path: Path) -> Any:
+def _sibling_record(path: Path) -> dict[str, Any]:
     try:
         record = json.loads(_read_regular(path))
     except (OSError, ValueError):
@@ -130,17 +130,29 @@ def _sibling_manifest(path: Path) -> Any:
         ) from None
     if not isinstance(record, dict) or "shared_photo_issue" not in record:
         raise ValueError("Shared-issue sibling record has no manifest")
-    return record["shared_photo_issue"]
+    return record
 
 
 def check_sibling(folder: Path, manifest: Any) -> None:
-    """Fail closed unless the sibling's record carries the identical manifest."""
+    """Fail closed unless the sibling's record carries the identical manifest.
+
+    The ledger is content-free, so the sibling record itself must also pass
+    the member checks: plate-free, no combined relation, and a municipal
+    subject matching its own manifest slot. Otherwise a completed vehicle
+    intake could be paired as an "issue" origin by editing its report.json.
+    """
     own = validate_issue_pair(manifest)
     try:
-        theirs = validate_issue_pair(
-            _sibling_manifest(sibling_record_path(folder, own))
-        )
+        record = _sibling_record(sibling_record_path(folder, own))
+        theirs = validate_issue_pair(record["shared_photo_issue"])
     except ValueError:
         raise ValueError("Shared-issue sibling manifest differs") from None
     if canonical_manifest(theirs) != canonical_manifest(own):
         raise ValueError("Shared-issue sibling manifest differs")
+    sibling_id = next(i for i in own["intake_ids"] if i != folder.name)
+    try:
+        member_manifest(record, sibling_id, own["photo_sha256"])
+    except ValueError:
+        raise ValueError(
+            "Shared-issue sibling record fails the member checks"
+        ) from None
