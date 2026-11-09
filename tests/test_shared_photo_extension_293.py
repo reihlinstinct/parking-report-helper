@@ -357,6 +357,30 @@ class ManifestValidationTests(ExtensionBase):
         with self.assertRaises(ValueError):
             extension_manifest(mismatch, "child-b", "b" * 64)
 
+    def test_recorded_path_picks_the_vehicle_side(self):
+        # 5164 sits under 12 parents including "חניה אסורה"; the recorded
+        # path, not any(), decides whether the child reports a vehicle.
+        record = {"plate": DASHED[PLATE_B]}
+        manifest = self.manifest("a" * 64, "b" * 64)
+        record["shared_photo_extension"] = manifest
+        parking = json.loads(json.dumps(record))
+        parking["municipal_subject"] = {
+            "code": "5164",
+            "owner_choice": True,
+            "event_type": "crosswalk_parking",
+            "path": ["חניה אסורה", "אחר"],
+        }
+        self.assertEqual(extension_manifest(parking, "child-b", "b" * 64), manifest)
+        sign = json.loads(json.dumps(record))
+        sign["municipal_subject"] = {
+            "code": "5164",
+            "owner_choice": True,
+            "event_type": "sign_request",
+            "path": ["שילוט ותמרורים", "אחר"],
+        }
+        with self.assertRaises(ValueError):
+            extension_manifest(sign, "child-b", "b" * 64)
+
 
 class HappyPathTests(ExtensionBase):
     def test_one_distinct_new_car_from_the_same_original(self):
@@ -571,6 +595,25 @@ class ParentEligibilityTests(ExtensionBase):
                 "event_type": "graffiti",
             },
             "approved_description": "גרפיטי על קיר ברחוב לדוגמה 1. אבקש לטפל במפגע.",
+        }
+        parent, digest = self.complete_parent(subject=subject)
+        child = self.child(parent, digest)
+        self.assert_blocked_quietly(child)
+        self.assertEqual(len(FakeMunicipality.created), 1)
+
+    def test_non_parking_path_parent_is_ineligible(self):
+        # The same non-vehicle guard follows the recorded path: a 5164 parent
+        # whose path is not "חניה אסורה" never carries a vehicle extension.
+        self.provision()
+        subject = {
+            "violation": {"category": "sign_request", "description": "שילוט חסר"},
+            "municipal_subject": {
+                "code": "5164",
+                "owner_choice": True,
+                "event_type": "sign_request",
+                "path": ["שילוט ותמרורים", "אחר"],
+            },
+            "approved_description": "שילוט חסר ברחוב לדוגמה 1. אבקש להתקין תמרור.",
         }
         parent, digest = self.complete_parent(subject=subject)
         child = self.child(parent, digest)
