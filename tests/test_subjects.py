@@ -161,6 +161,52 @@ class SubjectTests(unittest.TestCase):
                         )
                     send.assert_not_called()
 
+    def test_prepare_passes_approximate_to_the_centroid_fallback(self):
+        # F1: prepare-level pin for the owner-confirmed approximate path.
+        from PIL import Image
+
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            Image.new("RGB", (10, 10), "white").save(folder / "photo.jpg")
+            addresses = folder / "addresses.json"
+            addresses.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "streets": [
+                            {"StreetCode": "fake", "StreetName": "רחוב לדוגמה"}
+                        ],
+                        "addresses": [[31.77, 35.21, "1", "רחוב לדוגמה"]],
+                    }
+                )
+            )
+            reporter = {
+                "first_name": "שם",
+                "last_name": "לדוגמה",
+                "phone": SYNTHETIC_PHONE,
+                "id_number": SYNTHETIC_ID,
+                "email": "example@example.invalid",
+            }
+            r = record()
+            del r["approved_description"]  # build_report path: the note enters the text
+            r["address"]["house_number"] = "500"
+            r["address"]["approximate"] = True
+            (folder / "report.json").write_text(json.dumps(r))
+            _, payload, _, _ = prepare(folder, addresses, reporter)
+            self.assertEqual(payload["CaseHouseNumber"], "500")
+            (x, y) = __import__(
+                "parking_report.api106", fromlist=["ITM"]
+            ).ITM.transform(35.21, 31.77)
+            self.assertEqual(
+                (payload["CoordinateX"], payload["CoordinateY"]), (int(x), int(y))
+            )
+            self.assertIn("מרכז הרחוב", payload["CaseDescription"])
+
+            r["address"]["approximate"] = False
+            (folder / "report.json").write_text(json.dumps(r))
+            with self.assertRaises(Exception):
+                prepare(folder, addresses, reporter)
+
     def test_functional_non_vehicle_preview_and_digest(self):
         from PIL import Image
 

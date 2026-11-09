@@ -94,8 +94,11 @@ When the owner confirms a number that is absent from the municipal address
 points and the photo has no GPS, preparation keeps the owner-confirmed number,
 sets address.approximate=true, records the confirmation in address.source, and
 resolves the pin to the street centroid (coordinate_source
-approximate_street_centroid). Without approximate=true the same record is
-rejected, and a street with no municipal points at all is always rejected.
+approximate_street_centroid), and the centroid must lie within 100 m of one
+of the street's own address points. Without approximate=true the same record
+is rejected, and a street with no municipal points at all is always rejected.
+Recording the owner confirmation in address.source is an operator gate: the
+code checks the flag, not the provenance text.
 
 ## Location description
 

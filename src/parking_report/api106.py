@@ -194,14 +194,18 @@ def street_names(street: Any) -> Any:
     return [name for name in names if name and normalize(name)]
 
 
-def check_street_gps(all_points: Any, code: str, house_points: Any, gps_xy: Any) -> None:
+def check_street_gps(
+    all_points: Any, code: str, house_points: Any, gps_xy: Any
+) -> None:
     """Reject distant exact-name choices when the house is absent (#270)."""
     if house_points:
         return  # Existing house-distance guard owns this case.
     street_points = [p for p in all_points if p[3] == code]
-    if street_points and min(
-        math.hypot(p[0] - gps_xy[0], p[1] - gps_xy[1]) for p in street_points
-    ) > 200:
+    if (
+        street_points
+        and min(math.hypot(p[0] - gps_xy[0], p[1] - gps_xy[1]) for p in street_points)
+        > 200
+    ):
         raise InputError(
             "The supplied street is more than 200 m from the photo GPS. Check the street."
         )
@@ -221,11 +225,16 @@ def _absent_house_fallback(points: Any, code: Any, approximate: Any) -> Any:
     street_points = [p for p in points if p[3] == code]
     if not street_points:
         raise InputError("Street has no address points to approximate from.")
-    return (
-        sum(p[0] for p in street_points) / len(street_points),
-        sum(p[1] for p in street_points) / len(street_points),
-        "approximate_street_centroid",
+    centroid_x = sum(p[0] for p in street_points) / len(street_points)
+    centroid_y = sum(p[1] for p in street_points) / len(street_points)
+    nearest = min(
+        math.hypot(p[0] - centroid_x, p[1] - centroid_y) for p in street_points
     )
+    if nearest > 100:
+        raise InputError(
+            "Street centroid is over 100 m from its address points; use a photo with GPS."
+        )
+    return (centroid_x, centroid_y, "approximate_street_centroid")
 
 
 class Addresses:

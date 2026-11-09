@@ -233,30 +233,47 @@ class HebrewFinalLetterTests(unittest.TestCase):
             addr.resolve("בן אבי", "7", gps)
 
     def test_approximate_owner_confirmed_number_uses_street_centroid(self):
+        # Fully synthetic street, points and number (no real filing mirrored).
         addr = self._addresses(
-            [{"StreetCode": "1366", "StreetName": "מעגלי יבנה"}],
             [
-                [31.759107, 35.212276, "1", "מעגלי יבנה"],
-                [31.756002, 35.210245, "24", "מעגלי יבנה"],
+                {"StreetCode": "990001", "StreetName": "רחוב הסינתטי"},
+                {"StreetCode": "990002", "StreetName": "רחוב סינתטי אחר"},
+            ],
+            [
+                [31.750000, 35.200000, "2", "רחוב הסינתטי"],
+                [31.750500, 35.200500, "8", "רחוב הסינתטי"],
+                [31.710000, 35.160000, "4", "רחוב סינתטי אחר"],
             ],
         )
-        with self.assertRaisesRegex(
-            api106.InputError, "absent from the address data"
-        ):
-            addr.resolve("מעגלי יבנה", "110", None)
-        result = addr.resolve("מעגלי יבנה", "110", None, approximate=True)
-        self.assertEqual(result["street_code"], "1366")
-        self.assertEqual(result["house"], "110")
+        with self.assertRaisesRegex(api106.InputError, "absent from the address data"):
+            addr.resolve("רחוב הסינתטי", "500", None)
+        result = addr.resolve("רחוב הסינתטי", "500", None, approximate=True)
+        self.assertEqual(result["street_code"], "990001")
+        self.assertEqual(result["house"], "500")
         self.assertEqual(result["coordinate_source"], "approximate_street_centroid")
-        (x1, y1) = api106.ITM.transform(35.212276, 31.759107)
-        (x2, y2) = api106.ITM.transform(35.210245, 31.756002)
+        (x1, y1) = api106.ITM.transform(35.200000, 31.750000)
+        (x2, y2) = api106.ITM.transform(35.200500, 31.750500)
         self.assertEqual(result["x"], int((x1 + x2) / 2))
         self.assertEqual(result["y"], int((y1 + y2) / 2))
 
     def test_approximate_needs_street_points(self):
-        addr = self._addresses([{"StreetCode": "1366", "StreetName": "מעגלי יבנה"}], [])
+        addr = self._addresses(
+            [{"StreetCode": "990001", "StreetName": "רחוב הסינתטי"}], []
+        )
         with self.assertRaisesRegex(api106.InputError, "no address points"):
-            addr.resolve("מעגלי יבנה", "110", None, approximate=True)
+            addr.resolve("רחוב הסינתטי", "500", None, approximate=True)
+
+    def test_approximate_centroid_too_far_from_street_points_fails(self):
+        # A spread-out street: the mean sits far from every real point.
+        addr = self._addresses(
+            [{"StreetCode": "990003", "StreetName": "רחוב סינתטי ארוך"}],
+            [
+                [31.750000, 35.200000, "1", "רחוב סינתטי ארוך"],
+                [31.756500, 35.206500, "99", "רחוב סינתטי ארוך"],
+            ],
+        )
+        with self.assertRaisesRegex(api106.InputError, "over 100 m"):
+            addr.resolve("רחוב סינתטי ארוך", "500", None, approximate=True)
 
     def test_resolve_accepts_final_letter_variant(self):
         addr = self._addresses(
