@@ -207,6 +207,27 @@ def check_street_gps(all_points: Any, code: str, house_points: Any, gps_xy: Any)
         )
 
 
+def _absent_house_fallback(points: Any, code: Any, approximate: Any) -> Any:
+    """No photo GPS and the house is absent from the municipal points (#316).
+
+    Fail closed unless the record is explicitly approximate: then anchor the
+    pin at the street centroid and keep the owner-confirmed number; never
+    fabricate or move a house number.
+    """
+    if not approximate:
+        raise InputError(
+            "Photo has no usable GPS and this house number is absent from the address data."
+        )
+    street_points = [p for p in points if p[3] == code]
+    if not street_points:
+        raise InputError("Street has no address points to approximate from.")
+    return (
+        sum(p[0] for p in street_points) / len(street_points),
+        sum(p[1] for p in street_points) / len(street_points),
+        "approximate_street_centroid",
+    )
+
+
 class Addresses:
     def __init__(self, path: Any) -> None:
         data = json_file(path)
@@ -257,22 +278,9 @@ class Addresses:
                 source = "photo_gps"
             else:
                 if not points:
-                    if not approximate:
-                        raise InputError(
-                            "Photo has no usable GPS and this house number is absent from the address data."
-                        )
-                    street_points = [p for p in self.points if p[3] == code]
-                    if not street_points:
-                        raise InputError(
-                            "Street has no address points to approximate from."
-                        )
-                    # Owner-confirmed number absent from the municipal points:
-                    # anchor the pin at the street centroid, never a guess house.
-                    (x, y) = (
-                        sum(p[0] for p in street_points) / len(street_points),
-                        sum(p[1] for p in street_points) / len(street_points),
+                    (x, y, source) = _absent_house_fallback(
+                        self.points, code, approximate
                     )
-                    source = "approximate_street_centroid"
                 else:
                     (x, y) = points[0][:2]
                     if any(math.hypot(p[0] - x, p[1] - y) > 100 for p in points):
