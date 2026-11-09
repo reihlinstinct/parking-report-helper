@@ -229,7 +229,9 @@ class Addresses:
                 (x, y, str(house), next(iter(codes)) if len(codes) == 1 else None, name)
             )
 
-    def resolve(self, street_name: Any, house: Any, gps: Any) -> Any:
+    def resolve(
+        self, street_name: Any, house: Any, gps: Any, approximate: Any = False
+    ) -> Any:
         gps_xy = ITM.transform(gps[1], gps[0]) if gps else None
         if street_name:
             codes = self.aliases.get(normalize(street_name), set())
@@ -255,15 +257,29 @@ class Addresses:
                 source = "photo_gps"
             else:
                 if not points:
-                    raise InputError(
-                        "Photo has no usable GPS and this house number is absent from the address data."
+                    if not approximate:
+                        raise InputError(
+                            "Photo has no usable GPS and this house number is absent from the address data."
+                        )
+                    street_points = [p for p in self.points if p[3] == code]
+                    if not street_points:
+                        raise InputError(
+                            "Street has no address points to approximate from."
+                        )
+                    # Owner-confirmed number absent from the municipal points:
+                    # anchor the pin at the street centroid, never a guess house.
+                    (x, y) = (
+                        sum(p[0] for p in street_points) / len(street_points),
+                        sum(p[1] for p in street_points) / len(street_points),
                     )
-                (x, y) = points[0][:2]
-                if any(math.hypot(p[0] - x, p[1] - y) > 100 for p in points):
-                    raise InputError(
-                        "This address has multiple locations. Use a photo with GPS."
-                    )
-                source = "address_lookup"
+                    source = "approximate_street_centroid"
+                else:
+                    (x, y) = points[0][:2]
+                    if any(math.hypot(p[0] - x, p[1] - y) > 100 for p in points):
+                        raise InputError(
+                            "This address has multiple locations. Use a photo with GPS."
+                        )
+                    source = "address_lookup"
         else:
             if not gps_xy:
                 raise InputError(
