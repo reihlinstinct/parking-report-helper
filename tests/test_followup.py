@@ -21,21 +21,69 @@ def manifest():
     }
 
 
+def response_manifest():
+    value = manifest()
+    value.pop("parent_closed_at", None)
+    return dict(
+        value,
+        reply_received_at="2026-01-02T12:00:00+02:00",
+        reply_reference="municipal-reply-synthetic-1",
+        parent_status="unknown",
+    )
+
+
 class FollowupTests(unittest.TestCase):
+    manifest = staticmethod(manifest)
+
     def test_exact_validated_manifest(self):
-        self.assertEqual(validate_followup(manifest()), manifest())
+        self.assertEqual(validate_followup(self.manifest()), self.manifest())
         for bad in (
             None,
             {},
-            dict(manifest(), extra="bad"),
-            dict(manifest(), parent_digest="bad"),
-            dict(manifest(), parent_id="../bad"),
-            dict(manifest(), parent_closed_at="2026-01-01T12:00:00"),
-            dict(manifest(), approval_reference=" "),
-            dict(manifest(), parent_case_number="bad"),
+            dict(self.manifest(), extra="bad"),
+            dict(self.manifest(), parent_digest="bad"),
+            dict(self.manifest(), parent_id="../bad"),
+            dict(self.manifest(), parent_closed_at="2026-01-01T12:00:00"),
+            dict(self.manifest(), approval_reference=" "),
+            dict(self.manifest(), parent_case_number="bad"),
         ):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 validate_followup(bad)
+
+    def test_response_variant_is_exact_and_preserves_unknown_status(self):
+        value = response_manifest()
+        self.assertEqual(validate_followup(value), value)
+        for bad in (
+            dict(value, parent_closed_at="2026-01-01T12:00:00+02:00"),
+            dict(value, parent_status="closed"),
+            dict(value, parent_status="open"),
+            dict(value, reply_received_at="2026-01-02T12:00:00"),
+            dict(value, reply_reference=" "),
+            dict(value, reply_reference="bad reference"),
+            {k: v for k, v in value.items() if k != "reply_reference"},
+        ):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                validate_followup(bad)
+
+    def test_every_response_field_is_digest_bound(self):
+        with TemporaryDirectory() as tmp:
+            folder, addresses = make_folder(tmp)
+            record = json.loads((folder / "report.json").read_text())
+            variants = [response_manifest()]
+            for key, value in (
+                ("reply_reference", "municipal-reply-synthetic-2"),
+                ("reply_received_at", "2026-01-02T12:01:00+02:00"),
+                ("approval_reference", "approval-synthetic-2"),
+            ):
+                variants.append(dict(response_manifest(), **{key: value}))
+            digests = []
+            for value in variants:
+                record["followup"] = value
+                (folder / "report.json").write_text(json.dumps(record))
+                code, output = run([str(folder), "--addresses", str(addresses)])
+                self.assertEqual(code, 0)
+                digests.append(json.loads(output)["sha256"])
+            self.assertEqual(len(set(digests)), len(variants))
 
     def test_manifest_bound_into_digest_and_missing_approval_no_reservation(self):
         with TemporaryDirectory() as tmp:
@@ -55,7 +103,7 @@ class FollowupTests(unittest.TestCase):
                 },
             )[3]
             record = json.loads((folder / "report.json").read_text())
-            record["followup"] = manifest()
+            record["followup"] = self.manifest()
             (folder / "report.json").write_text(json.dumps(record))
             code, output = run([str(folder), "--addresses", str(addresses)])
             digest = json.loads(output)["sha256"]
@@ -84,7 +132,7 @@ class FollowupTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             folder, addresses = make_folder(tmp)
             record = json.loads((folder / "report.json").read_text())
-            record["followup"] = manifest()
+            record["followup"] = self.manifest()
             (folder / "report.json").write_text(json.dumps(record))
             _, output = run([str(folder), "--addresses", str(addresses)])
             digest = json.loads(output)["sha256"]
@@ -111,7 +159,7 @@ class FollowupTests(unittest.TestCase):
                 )
                 self.assertEqual(code, 0)
                 self.assertEqual(
-                    ledger.reserve.call_args.kwargs["followup"], manifest()
+                    ledger.reserve.call_args.kwargs["followup"], self.manifest()
                 )
                 execute.assert_called_once()
 
@@ -121,7 +169,7 @@ class FollowupTests(unittest.TestCase):
             record = json.loads((folder / "report.json").read_text())
             digests = []
             for evidence in ("approval-1", "approval-2"):
-                record["followup"] = dict(manifest(), approval_reference=evidence)
+                record["followup"] = dict(self.manifest(), approval_reference=evidence)
                 (folder / "report.json").write_text(json.dumps(record))
                 _, output = run([str(folder), "--addresses", str(addresses)])
                 digests.append(json.loads(output)["sha256"])
@@ -131,7 +179,7 @@ class FollowupTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             folder, addresses = make_folder(tmp)
             record = json.loads((folder / "report.json").read_text())
-            record["followup"] = manifest()
+            record["followup"] = self.manifest()
             (folder / "report.json").write_text(json.dumps(record))
             _, output = run([str(folder), "--addresses", str(addresses)])
             digest = json.loads(output)["sha256"]
@@ -168,3 +216,9 @@ class FollowupTests(unittest.TestCase):
                     )
                     self.assertEqual(code, 4)
                     ledger.reserve.assert_not_called()
+
+
+class ResponseFollowupGateTests(FollowupTests):
+    """Apply every normal preview and approval test to the response variant."""
+
+    manifest = staticmethod(response_manifest)
