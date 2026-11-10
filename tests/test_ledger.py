@@ -192,6 +192,44 @@ class LedgerTests(unittest.TestCase):
             "approval_reference": "approval-synthetic-1",
         }
 
+    def test_response_followup_keeps_parent_photo_and_uncertainty_guards(self):
+        from test_followup import response_manifest
+
+        with GitLedger(self.a).locked() as ledger:
+            ledger.reserve("original", "a" * 64, "b" * 64)
+            value = response_manifest()
+            for status in ("prepared", "creating", "created", "attaching"):
+                ledger.checkpoint("original", {"version": 1, "status": status})
+                with self.assertRaises(LedgerError):
+                    ledger.reserve("child", "c" * 64, "b" * 64, followup=value)
+            ledger.checkpoint(
+                "original",
+                {
+                    "version": 1,
+                    "status": "complete",
+                    "case": {"CaseNumberInCRM": "2601-1234567"},
+                },
+            )
+            snapshot = json.dumps(ledger.data, sort_keys=True)
+            for bad, photo in (
+                (dict(value, parent_digest="f" * 64), "b" * 64),
+                (dict(value, parent_case_number="2601-9"), "b" * 64),
+                (value, "f" * 64),
+            ):
+                with self.assertRaises(LedgerError):
+                    ledger.reserve("child", "c" * 64, photo, followup=bad)
+            ledger.reserve("child", "c" * 64, "b" * 64, followup=value)
+            before = json.loads(snapshot)
+            self.assertEqual(ledger.data["photos"], before["photos"])
+            for key, parent in before["reports"].items():
+                self.assertEqual(ledger.data["reports"][key], parent)
+            for status in ("prepared", "creating", "created", "attaching", "complete"):
+                ledger.checkpoint("child", {"version": 1, "status": status})
+                with self.assertRaises(LedgerError):
+                    ledger.reserve("sibling", "d" * 64, "b" * 64, followup=value)
+            with self.assertRaises(LedgerError):
+                ledger.reserve("ordinary", "e" * 64, "b" * 64)
+
     def test_approved_followup_preserves_photo_index_and_receipt(self):
         with GitLedger(self.a).locked() as ledger:
             ledger.reserve("original", "a" * 64, "b" * 64)

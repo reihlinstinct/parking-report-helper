@@ -1,7 +1,9 @@
 # Explicitly approved follow-ups
 
 A follow-up is a new municipal case, not a retry. The caller must independently
-verify owner authority, the current closed parent case, and the precise scope.
+verify owner authority, the parent evidence, and the precise scope. A closure-based
+follow-up requires a currently closed parent; a response-based follow-up preserves
+unknown parent status and does not claim closure.
 A manifest is an audit record, never permission by itself. A corrected
 re-filing of a still-open case on the same photo is not a follow-up; see
 [supersedes](API106.md#sanctioned-corrected-re-filing-supersedes) (#260).
@@ -9,7 +11,17 @@ re-filing of a still-open case on the same photo is not a follow-up; see
 The private record may carry `followup` with exactly `parent_id`, `parent_digest`,
 `parent_case_number`, `parent_closed_at`, and `approval_reference`. No identity or
 private evidence belongs in public fixtures. The entire manifest is bound into
-the normal preview digest. A live follow-up also requires
+the normal preview digest. Alternatively, a response-based manifest contains exactly the same common fields
+(`parent_id`, `parent_digest`, `parent_case_number`, `approval_reference`) plus
+`reply_received_at`, `reply_reference`, and `parent_status: "unknown"`, with no
+`parent_closed_at`. The reply timestamp is timezone-aware and means only when the
+municipal response was received, never when the parent was closed. The caller
+verifies the reply source, its association with the parent, and explicit owner
+approval of the new case. A reply is evidence, not authority. Missing, mixed, or
+unknown fields and any other status are refused. Both variants keep the same
+parent, photo, digest, one-child, and uncertainty guards.
+
+A live follow-up also requires
 `--approved-followup-sha256` equal to that digest, as well as all normal gates.
 
 Follow-up previews never reserve a ledger slot, even with `--ledger-dir`.
