@@ -107,6 +107,82 @@ class GitLedger:
         # Recheck remote acceptance even if a push result appeared successful.
         self.assert_current()
 
+    def reserve_unknown_retry(
+        self,
+        report_id: str,
+        digest: str,
+        photo_hash: str,
+        manifest: dict[str, str],
+    ) -> dict[str, Any]:
+        """Reserve one new child of an ordinary uncertain create; preserve parent.
+
+        Must be called under locked(). The caller independently verifies owner
+        approval and binds the unchanged base payload to parent_digest in prepare.
+        An approval reference is an audit fact, not permission inferred here.
+        """
+        from .unknown_retry import validate_unknown_retry
+
+        manifest = validate_unknown_retry(manifest, report_id)
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,119}", report_id):
+            raise LedgerError("Invalid retry intake ID")
+        if any(not re.fullmatch(_HASH, v) for v in (digest, photo_hash)):
+            raise LedgerError("Invalid retry digest")
+        if digest == manifest["parent_digest"]:
+            raise LedgerError("Retry digest must bind the approval manifest")
+        reports = self.data["reports"]
+        key = hashlib.sha256(report_id.encode()).hexdigest()
+        parent_key = hashlib.sha256(manifest["parent_id"].encode()).hexdigest()
+        parent = reports.get(parent_key)
+        if not parent or (
+            parent.get("digest"),
+            parent.get("photo_sha256"),
+            parent.get("state", {}).get("status"),
+        ) != (manifest["parent_digest"], photo_hash, "creating"):
+            raise LedgerError("Retry needs the exact uncertain-create parent")
+        relations = (
+            "unknown_retry",
+            "followup",
+            "supersedes",
+            "shared_photo",
+            "shared_issue",
+            "extension",
+            "superseded_by",
+        )
+        if any(k in parent for k in relations):
+            raise LedgerError("Retry parent must be an ordinary intake")
+        if parent["state"].get("case"):
+            raise LedgerError("Parent already has a case receipt")
+        if self.data["photos"].get(photo_hash) != parent_key:
+            raise LedgerError("Parent must retain the original photo index")
+        if photo_hash in self.data.get("shared_photos", {}):
+            raise LedgerError("Shared photo cannot be retried")
+        existing = reports.get(key)
+        if existing:
+            if (
+                existing.get("digest"),
+                existing.get("photo_sha256"),
+                existing.get("unknown_retry"),
+            ) != (digest, photo_hash, manifest):
+                raise LedgerError("Retry inputs changed")
+            return existing
+        for entry in reports.values():
+            for relation in relations:
+                value = entry.get(relation)
+                if isinstance(value, dict) and (
+                    value.get("parent_id") == manifest["parent_id"]
+                    or value.get("parent") == parent_key
+                ):
+                    raise LedgerError("Parent already has a related child")
+        entry = {
+            "digest": digest,
+            "photo_sha256": photo_hash,
+            "state": {"version": 1, "status": "prepared"},
+            "unknown_retry": manifest,
+        }
+        reports[key] = entry
+        self.persist()
+        return entry
+
     def reserve(
         self,
         report_id: str,
@@ -136,6 +212,8 @@ class GitLedger:
         key = hashlib.sha256(report_id.encode()).hexdigest()
         existing = reports.get(key)
         if existing:
+            if "unknown_retry" in existing:
+                raise LedgerError("Use the explicit unknown-retry path")
             if (
                 self._changed(existing, digest, photo_hash, followup, group, relation)
                 or existing.get("supersedes") != supersedes
@@ -144,6 +222,7 @@ class GitLedger:
                     "Existing intake ID has changed inputs; review without creating a new case"
                 )
             return existing
+        self._block_unknown_sibling(supersedes, followup, extension)
         if supersedes is not None:
             self._supersede(key, report_id, digest, photo_hash, supersedes)
         else:
@@ -169,6 +248,14 @@ class GitLedger:
             self.data["photos"].setdefault(photo_hash, key)
         self.persist()
         return entry
+
+    def _block_unknown_sibling(self, *manifests: dict[str, str] | None) -> None:
+        for manifest in manifests:
+            if manifest and any(
+                e.get("unknown_retry", {}).get("parent_id") == manifest.get("parent_id")
+                for e in self.data["reports"].values()
+            ):
+                raise LedgerError("Parent has an explicit unknown-retry child")
 
     def _relations(
         self,

@@ -82,6 +82,9 @@ flowchart LR
 Deployment-specific diagrams and private operational instructions belong in
 the private caller repository, not in this public engine README.
 
+Explicit unknown-result resubmissions need a separate per-case owner approval,
+the unchanged original evidence and the one-child [unknown-retry gate](docs/API106.md#explicit-owner-approved-unknown-result-resubmission-336). Default uncertain-result blocking stays on.
+
 Explicitly approved follow-ups can reuse original evidence only through the
 [parent-linked follow-up gate](docs/AUTHORIZED-FOLLOWUPS.md), never by changing
 photo bytes or deleting duplicate history.

@@ -104,6 +104,24 @@ def _bind_relations(
     record: dict[str, Any], intake_id: str, photo_hash: str, fingerprint: dict[str, Any]
 ) -> None:
     """Bind every declared relation manifest into the preview digest."""
+    if "unknown_retry" in record:
+        from .unknown_retry import validate_unknown_retry
+
+        if any(
+            k in record
+            for k in (
+                "followup",
+                "supersedes",
+                "shared_photo",
+                "shared_photo_extension",
+                "shared_photo_issue",
+            )
+        ):
+            raise ValueError("Unknown retry cannot combine another relation")
+        manifest = validate_unknown_retry(record["unknown_retry"], intake_id)
+        if _digest(fingerprint) != manifest["parent_digest"]:
+            raise ValueError("Unknown retry must preserve the exact parent payload")
+        fingerprint["unknown_retry"] = dict(manifest, member=intake_id)
     if "supersedes" in record:
         from .supersedes import validate_supersedes
 
@@ -176,6 +194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--approved-shared-issue-sha256", default="")
     p.add_argument("--approved-extension-sha256", default="")
     p.add_argument("--approved-supersedes-sha256", default="")
+    p.add_argument("--approved-unknown-retry-sha256", default="")
     p.add_argument(
         "--approved-category-routing",
         choices=("crosswalk_parking", "blocked_ramp"),
@@ -204,6 +223,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         issue = record_for_photo.get("shared_photo_issue")
         extension = record_for_photo.get("shared_photo_extension")
         supersedes = record_for_photo.get("supersedes")
+        unknown_retry = record_for_photo.get("unknown_retry")
+        _approval_gate(
+            args,
+            unknown_retry,
+            args.approved_unknown_retry_sha256,
+            digest,
+            "Unknown retry",
+        )
         _approval_gate(
             args, followup, args.approved_followup_sha256, digest, "Follow-up"
         )
@@ -222,7 +249,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Follow-up, shared-photo, extension and supersedes previews reserve nothing.
         exception = any(
             value is not None
-            for value in (followup, shared, issue, extension, supersedes)
+            for value in (followup, shared, issue, extension, supersedes, unknown_retry)
         )
         reserve_ledger = ledger if args.submit or not exception else None
         with reserve_ledger.locked() if reserve_ledger else nullcontext():
@@ -300,6 +327,10 @@ def _reserve(
     issue: Any = None,
 ) -> Any:
     report_id = folder.name
+    if "unknown_retry" in record:
+        return ledger.reserve_unknown_retry(
+            report_id, digest, photo_hash, record["unknown_retry"]
+        )
     if supersedes is not None:
         return ledger.reserve(report_id, digest, photo_hash, supersedes=supersedes)
     if followup is not None:

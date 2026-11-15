@@ -46,6 +46,7 @@ version is `0.6.0`. Changes to this contract follow the
         "--approved-shared-issue-sha256": {"default": ""},
         "--approved-extension-sha256": {"default": ""},
         "--approved-supersedes-sha256": {"default": ""},
+        "--approved-unknown-retry-sha256": {"default": ""},
         "--retry-photo": {"default": false, "flag": true},
         "--approved-category-routing": {"default": "", "choices": ["crosswalk_parking", "blocked_ramp"], "deprecated": true}
       },
@@ -272,3 +273,5 @@ flags, defaults, exit codes and JSON keys in the block above.
 Follow-up that needs its own PR: `--json` for plain report output. The
 [shared exit-code table](#exit-codes) documents the current codes.
 Design for the remaining #73 work (proposal): [CLI-CONTRACT-DESIGN.md](CLI-CONTRACT-DESIGN.md).
+
+Unknown-result retry manifests also require the exact `--approved-unknown-retry-sha256` and the [private per-case approval gate](API106.md#explicit-owner-approved-unknown-result-resubmission-336).
