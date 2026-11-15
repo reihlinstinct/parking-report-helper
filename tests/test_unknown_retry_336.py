@@ -242,6 +242,7 @@ class UnknownRetryCliTests(unittest.TestCase):
             ]
             with (
                 patch("parking_report.ledger.GitLedger", return_value=ledger),
+                patch.dict("os.environ", {"PARKING_106_ENABLE_LIVE": "true"}),
                 patch.object(api_cli, "execute", return_value=0) as execute,
             ):
                 self.assertEqual(
