@@ -141,6 +141,49 @@ class UnknownRetryTests(unittest.TestCase):
             with self.assertRaises(LedgerError):
                 ledger.reserve_unknown_retry("retry", "d" * 64, "b" * 64, manifest())
 
+    def test_supersedes_cannot_chain_from_any_retry_child_state(self):
+        with GitLedger(self.a).locked() as ledger:
+            self.parent(ledger)
+            ledger.reserve_unknown_retry("retry", "c" * 64, "b" * 64, manifest())
+            for status in ("prepared", "creating", "created", "attaching", "complete"):
+                ledger.checkpoint("retry", {"version": 1, "status": status})
+                before = copy.deepcopy(ledger.data)
+                with self.assertRaises(LedgerError):
+                    ledger.reserve(
+                        "third",
+                        "d" * 64,
+                        "b" * 64,
+                        supersedes=dict(manifest("c" * 64), parent_id="retry"),
+                    )
+                self.assertEqual(before, ledger.data)
+
+    def test_followup_cannot_chain_from_completed_retry_child(self):
+        with GitLedger(self.a).locked() as ledger:
+            self.parent(ledger)
+            ledger.reserve_unknown_retry("retry", "c" * 64, "b" * 64, manifest())
+            ledger.checkpoint("retry", {"version": 1, "status": "complete"})
+            followup = dict(
+                manifest("c" * 64),
+                parent_id="retry",
+                parent_case_number="2611-123",
+                parent_closed_at="2026-01-01T12:00:00+00:00",
+            )
+            before = copy.deepcopy(ledger.data)
+            with self.assertRaises(LedgerError):
+                ledger.reserve("third", "d" * 64, "b" * 64, followup=followup)
+            self.assertEqual(before, ledger.data)
+
+    def test_reconciled_parent_blocks_child_resume_without_changes(self):
+        with GitLedger(self.a).locked() as ledger:
+            self.parent(ledger)
+            ledger.reserve_unknown_retry("retry", "c" * 64, "b" * 64, manifest())
+            ledger.checkpoint("retry", {"version": 1, "status": "created"})
+            ledger.checkpoint("original", {"version": 1, "status": "complete"})
+            before = copy.deepcopy(ledger.data)
+            with self.assertRaises(LedgerError):
+                ledger.reserve_unknown_retry("retry", "c" * 64, "b" * 64, manifest())
+            self.assertEqual(before, ledger.data)
+
     def test_uncertain_child_never_creates_twice(self):
         api = MagicMock()
         api.create.side_effect = OSError("timeout")

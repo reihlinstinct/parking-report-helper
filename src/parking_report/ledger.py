@@ -368,7 +368,13 @@ class GitLedger:
             raise LedgerError("Supersedes payload is an exact duplicate of its parent")
         if any(
             k in parent
-            for k in ("followup", "shared_photo", "shared_issue", "extension")
+            for k in (
+                "followup",
+                "shared_photo",
+                "shared_issue",
+                "extension",
+                "unknown_retry",
+            )
         ):
             raise LedgerError("Supersedes parent is not an ordinary intake")
         if "superseded_by" in parent:
@@ -540,6 +546,8 @@ class GitLedger:
         )
         if actual != expected:
             raise LedgerError("Follow-up needs the completed matching parent")
+        if "unknown_retry" in parent:
+            raise LedgerError("Unknown-retry child cannot parent a follow-up")
         receipt_number = parent.get("state", {}).get("case", {}).get("CaseNumberInCRM")
         if receipt_number and receipt_number != followup["parent_case_number"]:
             raise LedgerError("Follow-up case reference conflicts with parent receipt")
@@ -631,7 +639,10 @@ class GitLedger:
         )
         if actual != expected:
             raise LedgerError("Extension needs the completed matching parent")
-        if any(k in parent for k in ("followup", "shared_photo", "extension")):
+        if any(
+            k in parent
+            for k in ("followup", "shared_photo", "extension", "unknown_retry")
+        ):
             raise LedgerError("Extension parent is not an ordinary intake")
         if self.data["photos"].get(photo_hash) != parent_key:
             raise LedgerError("Extension parent does not own the original photo")
