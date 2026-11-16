@@ -151,6 +151,49 @@ class Synthetic(unittest.TestCase):
             self.assertIn("PASS", text)
             self.assertNotIn("private.py", text)
 
+    def test_summary_budget_keeps_coverage_failures_and_skips_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = Path(tmp) / "metrics.json"
+            rows = [
+                {"status": "passed", "test": f"test_{i}", "checks": "א" * 500}
+                for i in range(2000)
+            ]
+            rows += [
+                {
+                    "status": "failed",
+                    "test": "test_failure",
+                    "reason": "AssertionError",
+                },
+                {
+                    "status": "skipped",
+                    "test": "test_skip",
+                    "reason": "Optional backend",
+                },
+            ]
+            metrics.write_text(json.dumps({"details": rows}))
+            text = (
+                "## Test results: FAIL\nCoverage: 93.41%\n<details>" + "x" * 1_100_000
+            )
+            result = c.bounded_summary(text, metrics)
+            self.assertLessEqual(len(result.encode("utf-8")), c.SUMMARY_BYTE_LIMIT)
+            self.assertIn("93.41%", result)
+            self.assertIn("test_failure", result)
+            self.assertIn("Optional backend", result)
+            self.assertLess(result.index("test_failure"), result.index("test_skip"))
+            self.assertLess(result.index("test_skip"), result.index("test_0"))
+            self.assertIn("Remaining per-test rows omitted", result)
+            self.assertEqual(c.bounded_summary("small", metrics), "small")
+
+    def test_coverage_workflow_measures_imported_package_and_rejects_empty_data(self):
+        path = ROOT / ".github/workflows/tests.yml"
+        if not path.exists():
+            self.skipTest("Source-only workflow excluded from Docker test image")
+        text = path.read_text()
+        self.assertIn("--source=parking_report ", text)
+        self.assertNotIn("--source=src/parking_report", text)
+        self.assertIn('t["covered_lines"] > 0', text)
+        self.assertIn("            coverage.json", text)
+
     def test_missing_corrupt_or_non_numeric_input_not_success(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "metrics.json"

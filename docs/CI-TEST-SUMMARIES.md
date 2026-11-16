@@ -58,3 +58,18 @@ checkout Python/coverage jobs; missing API extras are installed by those jobs.
 Unknown skip reasons explicitly say no alternate execution route was verified.
 No browser/Playwright job is invented. Five added tests cover observation,
 restoration, privacy, static plans and skip-route explanations.
+
+## Coverage source and size limits
+
+Coverage measures the installed `parking_report` package, matching the wheel
+that the tests import. Measuring checkout `src/parking_report` instead silently
+reported zero when the wheel's site-packages files were executed. The coverage
+job now rejects empty/no-execution data even when the optional ratchet is off.
+The existing floor is unchanged. JSON, Markdown and HTML reports are retained
+as the coverage artifact. This is combined statement/branch coverage of the
+Python package, not whole-repository or subprocess CLI coverage.
+
+When assertion plans would exceed the summary size budget, the posted summary
+keeps aggregate counts, coverage, and a compact per-test table with failures and
+skips first. It says when rows are omitted; detailed output remains in job logs.
+This avoids GitHub rejecting the entire summary at its one-MiB limit.
