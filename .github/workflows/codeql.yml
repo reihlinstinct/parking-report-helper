@@ -8,6 +8,10 @@ on:
     - cron: '43 2 * * 2'
 permissions:
   contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   analyze:
     name: CodeQL (${{ matrix.language }})
