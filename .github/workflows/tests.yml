@@ -85,8 +85,9 @@ jobs:
       - name: Measure coverage
         run: |
           status=0
-          python -m coverage run --branch --source=src/parking_report scripts/ci_test_report.py run --start tests --output test-results.json || status=$?
+          python -m coverage run --branch --source=parking_report scripts/ci_test_report.py run --start tests --output test-results.json || status=$?
           python -m coverage json -o coverage.json
+          python -c 'import json; t=json.load(open("coverage.json"))["totals"]; assert t["num_statements"] > 0 and t["covered_lines"] > 0, "No package execution measured"'
           python -m coverage report --format=markdown > coverage.md
           python -m coverage html
           python -m coverage report | tail -1
@@ -100,6 +101,7 @@ jobs:
           name: coverage-report
           path: |
             coverage.md
+            coverage.json
             htmlcov/
           retention-days: 30
       - name: Ratchet gate (enabled when repo variable COVERAGE_GATE=on)

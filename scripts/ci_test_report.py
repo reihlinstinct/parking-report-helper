@@ -465,6 +465,44 @@ def summary(metrics_path, coverage_path=None):
     return "\n".join(lines)
 
 
+# GitHub rejects a step summary over 1 MiB. Leave room for other appended text.
+SUMMARY_BYTE_LIMIT = 900_000
+
+
+def bounded_summary(text, metrics_path):
+    """Keep aggregates and per-test verdicts when assertion detail is too large."""
+    if len(text.encode("utf-8")) <= SUMMARY_BYTE_LIMIT:
+        return text
+    data, _ = _read_metrics(metrics_path)
+    lines = [
+        text.split("\n<details>", 1)[0],
+        "",
+        "Detailed assertion plans omitted to fit GitHub's summary size limit.",
+        "Full test output remains in the job logs.",
+        "",
+        "| Status | Test | What it checks | Reason |",
+        "| --- | --- | --- | --- |",
+    ]
+    used = len(("\n".join(lines) + "\n").encode("utf-8"))
+    try:
+        rows = sorted(
+            data.get("details", []), key=lambda row: _PRIORITY.get(row.get("status"), 9)
+        )
+        for index, row in enumerate(rows):
+            line = _row_cells(row)
+            size = len((line + "\n").encode("utf-8"))
+            if used + size > SUMMARY_BYTE_LIMIT - 200:
+                lines.append(
+                    f"\nRemaining per-test rows omitted: {len(rows) - index}. See job logs."
+                )
+                break
+            lines.append(line)
+            used += size
+    except (TypeError, AttributeError):
+        lines.extend(["", "Per-test details unavailable."])
+    return "\n".join(lines) + "\n"
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
@@ -477,7 +515,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.action == "run":
         return run_tests(args.start, args.output)
-    text = summary(args.metrics, args.coverage)
+    text = bounded_summary(summary(args.metrics, args.coverage), args.metrics)
     destination = os.environ.get("GITHUB_STEP_SUMMARY")
     if destination:
         with open(destination, "a") as stream:
