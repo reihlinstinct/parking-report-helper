@@ -184,6 +184,18 @@ class Synthetic(unittest.TestCase):
             self.assertIn("Remaining per-test rows omitted", result)
             self.assertEqual(c.bounded_summary("small", metrics), "small")
 
+    def test_oversized_summary_tolerates_unreadable_or_malformed_details(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            metrics = Path(tmp) / "metrics.json"
+            text = "Coverage: 93.41%\n<details>" + "x" * 1_100_000
+            for content in [None, "{bad", "[]", '{"details": [null]}']:
+                if content is not None:
+                    metrics.write_text(content)
+                result = c.bounded_summary(text, metrics)
+                self.assertIn("Per-test details unavailable.", result)
+                self.assertIn("93.41%", result)
+                self.assertLessEqual(len(result.encode()), c.SUMMARY_BYTE_LIMIT)
+
     def test_coverage_workflow_measures_imported_package_and_rejects_empty_data(self):
         path = ROOT / ".github/workflows/tests.yml"
         if not path.exists():

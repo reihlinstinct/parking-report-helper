@@ -73,3 +73,8 @@ When assertion plans would exceed the summary size budget, the posted summary
 keeps aggregate counts, coverage, and a compact per-test table with failures and
 skips first. It says when rows are omitted; detailed output remains in job logs.
 This avoids GitHub rejecting the entire summary at its one-MiB limit.
+
+The installed-package reports use absolute site-packages paths. This is expected:
+they identify the installed files the tests executed, not the checkout source.
+Oversized summaries with unreadable or malformed per-test metrics keep aggregate
+text and explicitly mark details unavailable instead of failing the summary step.

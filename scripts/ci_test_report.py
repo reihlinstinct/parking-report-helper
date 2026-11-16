@@ -484,19 +484,22 @@ def bounded_summary(text, metrics_path):
         "| --- | --- | --- | --- |",
     ]
     used = len(("\n".join(lines) + "\n").encode("utf-8"))
-    rows = sorted(
-        data.get("details", []), key=lambda row: _PRIORITY.get(row.get("status"), 9)
-    )
-    for index, row in enumerate(rows):
-        line = _row_cells(row)
-        size = len((line + "\n").encode("utf-8"))
-        if used + size > SUMMARY_BYTE_LIMIT - 200:
-            lines.append(
-                f"\nRemaining per-test rows omitted: {len(rows) - index}. See job logs."
-            )
-            break
-        lines.append(line)
-        used += size
+    try:
+        rows = sorted(
+            data.get("details", []), key=lambda row: _PRIORITY.get(row.get("status"), 9)
+        )
+        for index, row in enumerate(rows):
+            line = _row_cells(row)
+            size = len((line + "\n").encode("utf-8"))
+            if used + size > SUMMARY_BYTE_LIMIT - 200:
+                lines.append(
+                    f"\nRemaining per-test rows omitted: {len(rows) - index}. See job logs."
+                )
+                break
+            lines.append(line)
+            used += size
+    except (TypeError, AttributeError):
+        lines.append("Per-test details unavailable.")
     return "\n".join(lines) + "\n"
 
 
