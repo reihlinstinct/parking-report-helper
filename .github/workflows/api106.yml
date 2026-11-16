@@ -42,7 +42,9 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: helper/requirements/*.txt
+          cache-dependency-path: |
+            helper/requirements/build.txt
+            helper/requirements/api.txt
       - name: Install helper (hash-locked, #177)
         run: |
           python -m pip install --require-hashes -r helper/requirements/build.txt -r helper/requirements/api.txt
