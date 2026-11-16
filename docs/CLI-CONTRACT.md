@@ -1,0 +1,277 @@
+# CLI contract (v0, current behaviour)
+
+Issue #73. This file **documents what the four entry points do today**. It
+doesn't change them. `tests/test_cli_contract.py` loads the JSON block below
+and checks it against the real parsers and exit paths. Changing a flag, a
+default or an exit code without updating this file fails CI. The package
+version is `0.6.0`. Changes to this contract follow the
+[flag-stability policy](#flag-stability-policy).
+
+## Machine-readable contract
+
+<!-- cli-contract:begin -->
+```json
+{
+  "contract_version": 0,
+  "package_version": "0.6.0",
+  "commands": {
+    "parking-report": {
+      "module": "parking_report.cli:main",
+      "positionals": ["input"],
+      "options": {
+        "--intake": {"default": null},
+        "--drive-folder": {"default": null},
+        "--drive-api": {"default": null, "hidden": true},
+        "--city": {"default": ""},
+        "--name": {"default": ""},
+        "--no-photo": {"default": false, "flag": true},
+        "--municipality": {"default": null},
+        "--reporter": {"default": null},
+        "--json": {"default": false, "flag": true}
+      },
+      "exit_codes": {"0": "report text (or --json submissions) on stdout; also --help text", "1": "input/config error, `error: ...` on stderr", "2": "usage error (argparse or a flag-combination rule), usage text on stderr"},
+      "json_output": "only with --municipality"
+    },
+    "parking-report-106": {
+      "module": "parking_report.api_cli:main",
+      "positionals": ["folder"],
+      "options": {
+        "--addresses": {"default": null, "required": true},
+        "--state-dir": {"default": ".106-state"},
+        "--ledger-dir": {"default": null},
+        "--submit": {"default": false, "flag": true},
+        "--approved-sha256": {"default": ""},
+        "--approved-followup-sha256": {"default": ""},
+        "--approved-shared-photo-sha256": {"default": ""},
+        "--approved-shared-issue-sha256": {"default": ""},
+        "--approved-extension-sha256": {"default": ""},
+        "--approved-supersedes-sha256": {"default": ""},
+        "--approved-unknown-retry-sha256": {"default": ""},
+        "--retry-photo": {"default": false, "flag": true},
+        "--approved-category-routing": {"default": "", "choices": ["crosswalk_parking", "blocked_ramp"], "deprecated": true}
+      },
+      "exit_codes": {"0": "one JSON line: dry_run or submit result; --help prints argparse help text instead", "2": "usage error: argparse usage text on stderr, no JSON", "4": "blocked: fixed JSON line, no exception text", "5": "submit succeeded but the duplicate check found a second municipal case with the same text; case numbers in duplicate_case_numbers"},
+      "json_output": "one line on stdout for every outcome after successful argument parsing",
+      "stdout_keys": {
+        "dry_run": ["status", "sha256", "photo_upload_bytes", "network_requests"],
+        "submit": ["status", "sha256", "photo_attached", "duplicate_check", "duplicate_case_numbers"],
+        "blocked": ["status", "note"]
+      }
+    },
+    "parking-report-http": {
+      "module": "parking_report.http_service:main",
+      "positionals": [],
+      "options": {},
+      "environment": ["PARKING_HTTP_TOKEN", "PORT"],
+      "argv": "ignored (not parsed, not rejected), except -h/--help",
+      "exit_codes": {"0": "-h/--help: help text on stdout, before configuration is read or a socket is bound", "1": "invalid configuration: fixed message on stderr, no exception text"},
+      "config_error_message": "HTTP service configuration is invalid; check private environment",
+      "json_output": "HTTP responses only; see docs/HTTP106.md"
+    },
+    "p106-stats": {
+      "module": "parking_report.stats_cli:main",
+      "positionals": ["command"],
+      "options": {},
+      "subcommands": {
+        "build": {
+          "positionals": ["inputs"],
+          "options": {
+            "--output": {"default": null, "required": true},
+            "--top-streets": {"default": 20},
+            "--plates-ledger": {"default": null},
+            "--neighborhoods": {"default": null},
+            "--lang": {"default": null}
+          }
+        },
+        "refresh": {
+          "positionals": [],
+          "options": {
+            "--output": {"default": null, "required": true},
+            "--archive": {"default": [], "repeatable": true},
+            "--from": {"default": "2021-01-01"},
+            "--top-streets": {"default": 20},
+            "--plates-ledger": {"default": null},
+            "--neighborhoods": {"default": null},
+            "--lang": {"default": null},
+            "--save-union": {"default": null}
+          },
+          "environment": ["PARKING_106_SUBSCRIPTION_KEY", "PARKING_106_USERNAME", "PARKING_106_PASSWORD", "PARKING_REPORTER_ID_NUMBER"]
+        }
+      },
+      "exit_codes": {"0": "summary.json, the CSV tables and report.html written to the output directory; one summary line on stdout", "1": "input error (missing, unreadable or invalid export file; an unreadable --plates-ledger file; an unreadable or invalid --neighborhoods file; refresh: missing environment variables, a failed fetch or union, or an unwritable --save-union path), `p106-stats: ...` on stderr", "2": "usage error (argparse, or an invalid value such as --top-streets 0, a --lang code that is not in the report catalog, or a refresh --from that is not a YYYY-MM-DD date), message on stderr"}
+    }
+  }
+}
+```
+<!-- cli-contract:end -->
+
+## Exit codes
+
+One table for all four entry points, derived from the `exit_codes` of each
+command in the block above. `tests/test_cli_contract.py` fails when the two
+differ: a code, a row or a command added to one and not the other. — means
+the command never exits with that code on purpose. The table documents
+today's numbering; it renumbers nothing. Exits outside the documented paths
+(for example an uncaught exception or `KeyboardInterrupt`) are not covered.
+
+<!-- exit-code-table:begin -->
+| Code | Shared meaning | `parking-report` | `parking-report-106` | `parking-report-http` | `p106-stats` |
+|---|---|---|---|---|---|
+| `0` | Success, or `--help` | report text (or `--json` submissions) on stdout; `--help` | one JSON line, `dry_run` or `submit`; `--help` prints help instead | `-h`/`--help` only, before configuration is read or a socket is bound | output files written, one summary line on stdout |
+| `1` | Input or configuration error, message on stderr | `error: ...` on stderr | — | invalid configuration, fixed message | input, environment, fetch or write error, `p106-stats: ...` on stderr |
+| `2` | Usage error, usage text on stderr, never JSON | argparse or a flag-combination rule | argparse, no JSON | — | argparse or an invalid value |
+| `4` | Blocked (fail closed) | — | fixed `blocked` JSON line, no exception text | — | — |
+| `5` | Submitted, but a duplicate case was found | — | `duplicate_case_numbers` lists the cases | — | — |
+<!-- exit-code-table:end -->
+
+## Notes on current behaviour
+
+- **`parking-report`** needs exactly one of `input` or `--intake DIR`. `--drive-folder` requires `--intake`, `--drive-api` requires `--drive-folder` (it's for a local test server only and is hidden from `--help`), and `--reporter` and `--json` require `--municipality`. A broken rule exits 2 with an argparse usage message.
+- **`parking-report-106`** prints exactly one JSON line for every outcome *after argument parsing succeeds*: `dry_run` or `submit` (exit 0), the fixed `blocked` line (exit 4), or a successful submit whose post-submit duplicate check found a second municipal case with the identical text (exit 5, with `duplicate_check: "duplicates_found"` and the case numbers in `duplicate_case_numbers`; every submit line carries `duplicate_check` and `duplicate_case_numbers`: a fresh submission prints `"single"`, `"pending"` (the new case is not visible in the municipal listing yet), or `"unavailable"` when the check itself failed, none of which change the exit code, and any other submit result prints `"skipped"` with an empty list). Every `Exception` after parsing becomes that `blocked` line (a `BaseException` such as `KeyboardInterrupt` or `SystemExit` still propagates), and no exception text reaches the log. Before that point argparse owns the output: `--help` prints help text and exits 0, and a usage error prints usage text to stderr and exits 2. Neither is JSON. A live submission additionally needs `PARKING_106_ENABLE_LIVE=true`, the exact `--approved-sha256` and `--ledger-dir`; otherwise it ends `blocked`. A record with a `shared_photo_extension` manifest (#293, [docs](SHARED-PHOTO.md)) also needs `--approved-extension-sha256` equal to the reviewed digest plus the private guard seed and key ID in the environment (`PARKING_GUARD_SEED`, `PARKING_GUARD_KEY_ID`); extension previews reserve nothing, and the completed parent intake's preserved private artifacts must corroborate its ledger digest before any reservation. A record with a `supersedes` manifest (#260, [docs](API106.md#sanctioned-corrected-re-filing-supersedes)) is a corrected re-filing of a still-open parent intake on the same original photo; a live run also needs `--approved-supersedes-sha256` equal to the reviewed digest, supersedes previews reserve nothing, and the ledger refuses the reservation unless the named parent exists with the manifest's digest, the same photo and an open state.
+- **`parking-report-http`** reads only `-h`/`--help` from the command line (#188): either one, anywhere in the arguments, prints help on stdout and exits 0 before any configuration is read or a socket is bound. Every other argument is still **ignored, not rejected**. Rejecting them would be a behaviour change for a separate PR. A missing or short `PARKING_HTTP_TOKEN` or an invalid `PORT` exits 1 with the fixed message in `config_error_message`. Otherwise it serves until it's stopped.
+
+- **`p106-stats`** is fully offline: `build` reads one or more `reports_raw.json` exports and writes `summary.json`, the CSV tables and `report.html` into `--output`. A missing or invalid export exits 1; `--top-streets` must be positive (exit 2 otherwise). With `--plates-ledger CSV` (#220) it additionally aggregates the private filing ledger into `plates.csv` (repeat plates with 3+ distinct identified filed reports: `plate, reports`; only standard 7/8-digit plates, optionally dashed in the standard positions, are publishable and appear in canonical dashed form; reports are deduplicated by union-find over `folder_id`/`municipal_ref`) and sets `repeat_plates_count` in `summary.json`. Rows with a non-standard plate, an invalid or impossible `filed_date`, or no identifier at all are excluded and their count is printed to stderr. The ledger itself is read locally and never copied into the output, and any build that does not emit `plates.csv` removes a stale one. An unreadable, non-UTF-8 or malformed CSV, or one without `plate`/`filed_date` columns, exits 1. Without the flag no `plates.csv` is written and `repeat_plates_count` is 0.
+- **`p106-stats --neighborhoods PATH`** (#225), on both `build` and `refresh`, fills `by_neighborhood` in `summary.json` and adds the neighborhood chart to `report.html`. `PATH` is a UTF-8 JSON file holding one object that maps a street name to a neighborhood name, both non-empty strings, for example `{"רחוב לדוגמה": "שכונה לדוגמה"}`. A street is matched exactly as it appears in `by_street` (after surrounding whitespace is trimmed from the export); every incident whose street is not in the mapping, including incidents with no street, is counted under `(אחר)`. `by_neighborhood` is ordered by count, then name. An empty object `{}` is accepted and counts everything under `(אחר)`. A missing or unreadable file, or one that is not valid UTF-8, exits 1 with `p106-stats: --neighborhoods: the mapping file could not be read`; a file that is not JSON, is not one object, or has an empty, blank or non-string name exits 1 with `p106-stats: --neighborhoods: the mapping file must be one JSON object mapping non-empty street names to non-empty neighborhood names`. Neither message includes the path or the file's contents, and both are printed before any output is written (and, in `refresh`, before any network call). No mapping ships with the package and none is used by default: without the flag `by_neighborhood` stays `null` and every output is unchanged.
+- **`p106-stats --lang CODE`** (td423/td424), on both `build` and `refresh`, sets the language of `report.html`'s own text: titles, headings, table labels, notes and the labels `p106-stats` itself writes (closure-time buckets, `(ללא רחוב)`, `(לא ידוע)`, `(אחר)`). The accepted codes are exactly the `languages` blocks of the report catalog, `src/parking_report/configs/report_strings.json`; each block gives the code, the language's own name, its direction (the page's `lang`, `dir` and CSS direction come from it) and whether it is a machine draft. Adding a language is one new block plus one value per key, with no code change. Without the flag the catalog's default language is used and `report.html` is unchanged byte for byte. An unknown code exits 2 at argument parsing, before any file is read, any environment variable is checked or any network call is made; the message lists the catalog's languages as `code (own name)`. A machine-draft language shows a note saying so, and every non-default language shows a note that city data stays as the city wrote it. City data is never translated: category, street, address and status names appear as they are in the export, and `summary.json` and the CSV tables do not depend on `--lang`.
+- **`p106-stats` dates and time zones** (#242): the weekly table in `summary.json` (`by_week`) and the chart in `report.html` cover the trailing 12 calendar weeks ending with the ISO week of the **local** date on the machine that runs the build (Python's `date.today()`, i.e. the runner's time zone), not the UTC date. A run near midnight can therefore end the window one ISO week earlier or later depending on where the job runs (for example a UTC CI runner versus a machine in Asia/Jerusalem). `by_month` is not anchored to the run date: it counts the calendar months that have incidents. Incidents are placed by their `createdon` timestamp; one with an explicit offset is converted to UTC first, a naive one is used as written. Week keys use the ISO week-year (`2027-01-01` falls in `2026-W53`), never the calendar year. No flag controls the anchor date; this documents existing behaviour.
+- **`p106-stats refresh`** (#232, parking-stats #13) is the online counterpart: it fetches the reporter's cases from GetContactCases (`--from` date, default 2021-01-01) using `PARKING_106_SUBSCRIPTION_KEY`, `PARKING_106_USERNAME`, `PARKING_106_PASSWORD` and `PARKING_REPORTER_ID_NUMBER` from the environment (any missing one exits 1 before any network call). `--from` is validated as a strict zero-padded YYYY-MM-DD date (exit 2; `2026-1-5` is rejected locally, not by the API after login). Every `--archive` export plus any `--plates-ledger` CSV and `--neighborhoods` mapping is loaded and validated before the first network call too, and refresh then unions the fetched rows with the archives by `case_number` - fetched rows win on overlap because they carry the current status, archived rows without a case number are kept as-is, a fetched row without one is an input error (exit 1) - and runs the same build (same outputs, same `--plates-ledger` behaviour, same `--top-streets` rule). `summary.json` lists the archive file names plus `GetContactCases` as inputs. With `--save-union PATH` the merged raw export is written there too with 0600 permissions (an unwritable path exits 1 before any output is built); it contains case texts and is private - keep it outside any published repository. The refreshed-archived-rows count on stdout counts each archived row once, even if the fetch repeats a case number. The stdout line reports fetched rows, refreshed archived rows and the total. When several inputs are bad at once the checks run in a fixed order: environment variables (exit 1), `--from` (exit 2), archives, `--plates-ledger` and `--neighborhoods` (exit 1), fetch and union (exit 1), `--save-union` (exit 1).
+
+## Man pages (#188)
+
+The four console commands in `pyproject.toml` `[project.scripts]` are the
+**shipped** commands and each has a page in `man/man1/`:
+`parking-report.1`, `parking-report-106.1`, `parking-report-http.1` and
+`p106-stats.1`.
+Everything under `scripts/` is **internal** tooling and has no page.
+
+The pages are generated, not hand-edited. `scripts/gen_manpages.py` reads the
+JSON block above (flags, defaults, choices, exit codes) and each command's own
+argparse definitions in-process (description, option help), without running
+the command, reading configuration, binding a socket or using the network.
+`tests/test_manpages_188.py` fails when a committed page differs from the
+generator's output. Generation and `--check` import the package and all four
+command modules, so they need the existing `api` extra installed from its
+hash lock, as for the tests (see [DEPENDENCY-LOCKS.md](DEPENDENCY-LOCKS.md));
+the installer itself only copies files.
+
+```sh
+python scripts/gen_manpages.py            # regenerate man/man1/*.1
+python scripts/gen_manpages.py --check    # exit 1 on drift
+python scripts/install_manpages.py        # $DESTDIR$PREFIX/share/man/man1
+PREFIX=$HOME/.local python scripts/install_manpages.py
+DESTDIR=/tmp/stage PREFIX=/usr python scripts/install_manpages.py
+```
+
+`PREFIX` defaults to `/usr/local` and must be absolute; `DESTDIR` is empty by
+default. `--prefix`/`--destdir` override them. The installer copies only the
+shipped pages, needs no network and never calls `sudo`. Both scripts are
+quiet by default; `--debug` or `PARKING_MANPAGES_DEBUG=1` prints stage names
+to stderr. Logs never contain arguments, paths, environment values or
+configuration, and a failure prints only the stage and the error class.
+
+Path safety (#207). `PREFIX` must not contain a `..` component, so
+`$DESTDIR$PREFIX` cannot climb out of the staging directory (exit 1,
+`stage=destination error=ValueError`). The trusted root is `DESTDIR` when it
+is set, otherwise `PREFIX`: it and its parents are used as they are (they may
+be symlinks). Every directory below it, and every existing page, must be a
+real directory or regular file; a symlink there is refused (exit 1,
+`stage=copy error=UnsafePathError`) before any page is written. Pages are
+written to a new temporary file in `man1` and swapped in with `os.replace`,
+so an existing link or hard-linked file is never written through or
+`chmod`-ed. The installer is not safe against a concurrent attacker: run it
+only on directories nobody else can write to while it runs.
+
+Stale pages (#204). The installer removes a page only if it installed that
+page itself. Each successful install writes
+`$DESTDIR$PREFIX/share/man/.parking-report-helper-man1.manifest` (in
+`share/man`, not `man1`, because `mandb` warns about any non-page file in
+`man1`): a fixed header line, then one `<sha256>  <page>` line per page it
+installed, sorted, so the same pages always give the same bytes. On the next
+install a page is removed (`removed stale <page>` on stdout) only when it is
+listed in the previous manifest, is no longer shipped, is still a regular
+file in `man1` and still has the recorded SHA-256. A listed page that is now
+a symlink or anything but a regular file, or whose bytes changed, is kept
+(`kept stale <page> (...)`) and not followed. A listed page whose read or
+removal fails with an OS error such as `PermissionError` (an unreadable page,
+a sticky or immutable entry) is kept too, as `kept stale <page> (unreadable)`
+or `kept stale <page> (not removable)`, and the install still exits 0 (#257).
+A manifest entry must be a
+plain page name ending in `.1` (no `/`, no leading `.`); one bad line, an
+unknown header, a duplicate, non-ASCII bytes or a file over 64 KiB makes the
+installer ignore the whole manifest: it removes nothing, prints
+`install_manpages: previous manifest ignored error=ManifestError; no stale
+page removed` to stderr and still exits 0. A missing manifest (first install,
+or an install made before #204) owns nothing; a manifest path that is a
+symlink or directory is refused like a page (`error=UnsafePathError`). The
+new manifest is written last and lists exactly the pages installed this time,
+so kept pages are disowned and an interrupted cleanup is retried. Pages that
+were never in a manifest, pages with similar names and pages in other
+sections are never touched. There is no dry-run mode, and the same
+concurrent-writer caveat as above applies.
+
+Type checks: the configured `mypy` run covers `src` only. The two scripts
+check clean when run explicitly with the source tree on the path,
+`MYPYPATH=src mypy scripts/gen_manpages.py scripts/install_manpages.py`
+(also with `--strict`); CI does not run that.
+
+After changing a flag, help text or exit code, update the JSON block and run
+the generator in the same PR.
+
+Page date (#206). The `.TH` date on every page is the fixed `PAGE_DATE`
+string in `scripts/gen_manpages.py`. Generation never reads the wall clock,
+the time zone, the locale, `SOURCE_DATE_EPOCH` or any other environment
+setting for it, so the same tree always gives the same bytes
+(`tests/test_manpages_date_206.py`). Keeping the date current is a **manual
+release checklist, not an automated check**: nothing compares `PAGE_DATE`
+with a release date or fails when it is old. When a maintainer changes the
+package version for a release (`version` in `pyproject.toml`,
+`parking_report.__version__` and `package_version` in the JSON block above):
+
+1. Set `PAGE_DATE` to the release date (`YYYY-MM-DD`) in the same PR.
+2. With the `api` extra installed, run `python scripts/gen_manpages.py`,
+   then `python scripts/gen_manpages.py --check` (exit 0).
+3. Commit the regenerated `man/man1/*.1` with the version change.
+
+A `PAGE_DATE` change without step 2 makes `--check` and the drift test fail.
+Between releases the date stays as it is, even when pages are regenerated
+for a help-text change.
+
+## Known gaps (measured, not fixed here)
+
+1. `--json` isn't available everywhere. `parking-report` has it only with `--municipality`; plain report text has no JSON mode.
+2. Resolved by the [shared exit-code table](#exit-codes): `0`, `1` and `2` already mean the same in every command that uses them, and `4` and `5` exist only in `parking-report-106`. No code was renumbered.
+3. `parking-report-106`'s `prog` comes from `sys.argv[0]`, and its parser is built inside `main()`, not a `build_parser()`.
+4. Resolved by the [flag-stability policy](#flag-stability-policy): flag changes need a `CHANGELOG.md` entry.
+
+## Flag-stability policy
+
+Adopted by the maintainer in #73 (decision 6433915118). It applies to the
+flags, defaults, exit codes and JSON keys in the block above.
+
+1. **Supported API.** The CLI and this contract are the supported operator
+   API.
+2. **Breaking changes.** Removing or renaming a flag, or changing a default,
+   an exit code or a documented JSON key, needs a **minor** version bump
+   before 1.0 and a **major** bump from 1.0 on. The same PR states the
+   compatibility impact and the migration, updates this file and adds a
+   `CHANGELOG.md` entry.
+3. **Deprecation before removal.** A normal removal or rename is announced
+   as a deprecation first, and the old behaviour keeps working for at least
+   one released minor version. `--approved-category-routing` is deprecated
+   today.
+4. **Additive changes.** A new flag, exit code or JSON key is not exempt. It
+   needs a contract update, tests, a `CHANGELOG.md` entry and the right
+   semver bump.
+5. **Security and privacy exception.** When keeping the old behaviour would
+   keep an exposure, a fix may fail closed immediately, without the
+   deprecation period. The PR documents the exception and the migration. A
+   dangerous flag is never kept working just to honour a deprecation.
+6. **Gates stay.** This policy never weakens an existing safety or approval
+   gate (for example live-submission enablement, the exact reviewed digest,
+   or the durable ledger).
+
+Follow-up that needs its own PR: `--json` for plain report output. The
+[shared exit-code table](#exit-codes) documents the current codes.
+Design for the remaining #73 work (proposal): [CLI-CONTRACT-DESIGN.md](CLI-CONTRACT-DESIGN.md).
+
+Unknown-result retry manifests also require the exact `--approved-unknown-retry-sha256` and the [private per-case approval gate](API106.md#explicit-owner-approved-unknown-result-resubmission-336).

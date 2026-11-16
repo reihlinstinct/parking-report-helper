@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+.env
+.env.*
+!.env.example
+
+credentials.json
+reporter.json
+addresses.json
+.106-state/

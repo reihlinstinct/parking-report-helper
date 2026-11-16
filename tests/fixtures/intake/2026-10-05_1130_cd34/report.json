@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "status": "needs_clarification",
+  "captured_at": "2026-10-05 11:30",
+  "address": {"street": "הדוגמה", "house_number": "1", "city": "ירושלים", "approximate": true},
+  "plate": "11-111-11",
+  "violation": {"description": "", "category": "other", "confidence": "low", "needs_clarification": true, "question": "האם הרכב חוסם את מעבר החציה או רק קרוב אליו?"},
+  "photo": "photo.jpg"
+}

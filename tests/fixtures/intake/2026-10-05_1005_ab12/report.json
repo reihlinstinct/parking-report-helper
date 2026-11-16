@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "status": "ready",
+  "captured_at": "2026-10-05 10:05",
+  "gps": {"lat": 31.75081, "lon": 35.21398, "heading_deg": 338},
+  "address": {"street": "התנופה", "house_number": "17", "neighborhood": "תלפיות", "city": "ירושלים", "approximate": true, "source": "OpenStreetMap Nominatim"},
+  "plate": "00-000-00",
+  "car_type": "קופרה",
+  "violation": {"description": "על המדרכה וחוסם אותה למעבר הולכי רגל", "category": "sidewalk", "confidence": "high", "needs_clarification": false, "question": ""},
+  "photo": "photo.jpg",
+  "notes": "",
+  "user_corrections": []
+}

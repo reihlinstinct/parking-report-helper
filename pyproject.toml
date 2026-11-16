@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parking-report-helper"
+version = "0.6.0"
+description = "Turn a JSON list of vehicles into Hebrew parking-violation report drafts."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+api = [
+    # Pillow 13.0.0 is the first release with the fixes for the advisories in
+    # #109; it requires Python >= 3.11, hence requires-python above (#122).
+    "Pillow>=13,<14",
+    "pyproj>=3.6,<4",
+    "filelock>=3.13,<5",
+]
+
+
+[project.scripts]
+parking-report = "parking_report.cli:main"
+parking-report-106 = "parking_report.api_cli:main"
+parking-report-http = "parking_report.http_service:main"
+p106-stats = "parking_report.stats_cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+parking_report = ["configs/*.json"]
+
+[tool.mypy]
+# Issue #65: src type-checks clean. Third-party packages from the [api] extra
+# ship their own type information, so no blanket ignore_missing_imports.
+files = ["src"]
+python_version = "3.11"
+warn_unused_configs = true
+
+[tool.ruff]
+# Issue #64. Settings are explicit so a ruff upgrade cannot silently change
+# them; CI pins the ruff version (tests.yml, job "ruff").
+target-version = "py311"
+line-length = 88
+src = ["src"]
+
+[tool.ruff.lint]
+# Pyflakes, the error subset of pycodestyle, and import sorting.
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["parking_report"]

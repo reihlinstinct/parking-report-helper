@@ -1,0 +1,303 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Weekly full suite: Sunday 06:00 Israel winter time (04:00 UTC;
+    # runs 07:00 IDT in summer).
+    - cron: '0 4 * * 0'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  unittest:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package (hash-locked, #177)
+        run: |
+          python -m pip install --require-hashes -r requirements/build.txt -r requirements/api.txt
+          python -m pip install --no-deps --no-build-isolation .
+      - name: Run unit and CLI tests
+        run: python scripts/ci_test_report.py run --start tests --output test-results.json
+
+      - name: Publish test summary
+        if: ${{ always() }}
+        run: python scripts/ci_test_report.py summary --metrics test-results.json
+
+  py315:
+    name: Python 3.15 (informational)
+    # Informational Python 3.15 check (#216): continue-on-error, never a
+    # gate. Runtime stays 3.13.
+    continue-on-error: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.15'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package (hash-locked, #177)
+        run: |
+          python -m pip install --require-hashes -r requirements/build.txt -r requirements/api.txt
+          python -m pip install --no-deps --no-build-isolation .
+      - name: Run unit and CLI tests (informational)
+        run: python scripts/ci_test_report.py run --start tests --output test-results.json
+      - name: Publish test summary
+        if: ${{ always() }}
+        run: python scripts/ci_test_report.py summary --metrics test-results.json
+
+  coverage:
+    name: Coverage report
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package and coverage (hash-locked, #177)
+        run: |
+          python -m pip install --require-hashes -r requirements/build.txt -r requirements/api.txt -r requirements/ci.txt
+          python -m pip install --no-deps --no-build-isolation .
+      - name: Measure coverage
+        run: |
+          status=0
+          python -m coverage run --branch --source=src/parking_report scripts/ci_test_report.py run --start tests --output test-results.json || status=$?
+          python -m coverage json -o coverage.json
+          python -m coverage report --format=markdown > coverage.md
+          python -m coverage html
+          python -m coverage report | tail -1
+          exit "$status"
+      - name: Publish test summary
+        if: ${{ always() }}
+        run: python scripts/ci_test_report.py summary --metrics test-results.json --coverage coverage.json
+      - name: Upload report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: |
+            coverage.md
+            htmlcov/
+          retention-days: 30
+      - name: Ratchet gate (enabled when repo variable COVERAGE_GATE=on)
+        if: vars.COVERAGE_GATE == 'on'
+        run: |
+          floor=$(cat .github/coverage-floor.txt)
+          python -m coverage report | tail -1
+          python -m coverage report --fail-under="$floor"
+
+  typecheck:
+    name: Type check (mypy)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package and mypy (hash-locked, #177)
+        run: |
+          python -m pip install --require-hashes -r requirements/build.txt -r requirements/api.txt -r requirements/ci.txt
+          python -m pip install --no-deps --no-build-isolation .
+      - name: mypy (blocking when repo variable MYPY_GATE=on)
+        env:
+          MYPY_GATE: ${{ vars.MYPY_GATE }}
+        run: |
+          status=0
+          python -m mypy || status=$?
+          if [ "$status" -ne 0 ] && [ "$MYPY_GATE" != "on" ]; then
+            echo "::warning::mypy reported errors; report-only until MYPY_GATE=on (issue #65)"
+            exit 0
+          fi
+          exit "$status"
+
+  ruff:
+    # Issue #64: ruff lint + format check. Report-only until the repo variable
+    # RUFF_GATE=on (planned for November), the same pattern as MYPY_GATE.
+    name: Ruff (lint + format)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install ruff (pinned in requirements/ci.txt, hash-locked, #177)
+        run: python -m pip install --require-hashes -r requirements/ci.txt
+      - name: ruff check and format check (blocking when repo variable RUFF_GATE=on)
+        env:
+          RUFF_GATE: ${{ vars.RUFF_GATE }}
+        run: |
+          status=0
+          ruff check --output-format=github . || status=1
+          ruff format --check . || status=1
+          if [ "$status" -ne 0 ] && [ "$RUFF_GATE" != "on" ]; then
+            echo "::warning::ruff reported findings; report-only until RUFF_GATE=on (issue #64)"
+            exit 0
+          fi
+          exit "$status"
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Run tests inside the image build
+        run: docker build --target test .
+      - name: Build runtime image (not pushed)
+        run: docker build --target runtime --tag parking-report-helper:ci .
+      - name: Smoke test
+        run: |
+          docker run --rm parking-report-helper:ci --help
+          docker run --rm -v "$PWD:/data:ro" parking-report-helper:ci sample.json --city "Example City" | head -n 3
+          test "$(docker run --rm --entrypoint id parking-report-helper:ci -u)" != 0
+      - name: Build Render HTTP image and smoke-test health without API credentials
+        run: |
+          docker build -f Dockerfile.render -t parking-http:ci .
+          docker run -d --name parking-http -p 127.0.0.1:10000:10000 -e PARKING_HTTP_TOKEN=synthetic-ci-token-abcdefghijklmnop parking-http:ci
+          trap 'docker rm -f parking-http' EXIT
+          python - <<'PY'
+          import json, time, urllib.request
+          for attempt in range(20):
+              try:
+                  with urllib.request.urlopen('http://127.0.0.1:10000/healthz', timeout=2) as response:
+                      assert json.load(response)['submission_enabled'] is False
+                  break
+              except OSError:
+                  time.sleep(.5)
+          else:
+              raise SystemExit('Health smoke failed')
+          PY
+          test "$(docker exec parking-http id -u)" != 0
+
+  security:
+    # Issue #74: bandit (Python SAST beyond CodeQL) and pip-audit (CVEs in the
+    # resolved environment, not only declared deps). Measure-only: findings are
+    # reported in the job summary; the job fails only when the repo variable
+    # SECURITY_GATE=on (planned for December), the same pattern as COVERAGE_GATE.
+    name: Security scan (bandit + pip-audit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package and freeze the resolved environment
+        run: |
+          python -m pip install --require-hashes -r requirements/build.txt -r requirements/api.txt
+          python -m pip install --no-deps --no-build-isolation .
+          python -m pip freeze --exclude-editable > resolved-requirements.txt
+          python -m pip install --require-hashes -r requirements/ci.txt
+      - name: bandit over src/
+        env:
+          SECURITY_GATE: ${{ vars.SECURITY_GATE }}
+        run: |
+          status=0
+          bandit -r src -f txt -o bandit.txt || status=$?
+          {
+            echo "## bandit"
+            echo '```'
+            sed -n '/^Run metrics/,$p' bandit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ] && [ "$SECURITY_GATE" != "on" ]; then
+            echo "::warning::bandit reported findings; measure-only until SECURITY_GATE=on (issue #74)"
+            exit 0
+          fi
+          exit "$status"
+      - name: pip-audit of the resolved environment
+        env:
+          SECURITY_GATE: ${{ vars.SECURITY_GATE }}
+        run: |
+          status=0
+          pip-audit -r resolved-requirements.txt --no-deps --disable-pip \
+            --progress-spinner off --desc off -f markdown -o pip-audit.md || status=$?
+          { echo "## pip-audit"; cat pip-audit.md; } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ] && [ "$SECURITY_GATE" != "on" ]; then
+            echo "::warning::pip-audit found known vulnerabilities; measure-only until SECURITY_GATE=on (issue #74)"
+            exit 0
+          fi
+          exit "$status"
+      - name: Upload reports
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: security-reports
+          path: |
+            bandit.txt
+            pip-audit.md
+          retention-days: 30
+
+  alert:
+    # Weekly full-run failure opens (or throttled-updates) one alert issue (#186).
+    needs: [unittest, py315, coverage, typecheck, ruff, docker, security]
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the single alert issue (at most one comment per 24 hours)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REPOSITORY" = "reihlinstinct/parking-report-helper" ]
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          call() { printf 'header = "Authorization: Bearer %s"\nheader = "Accept: application/vnd.github+json"\n' "$GH_TOKEN" | curl -fsS -K - "$@"; }
+          run="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # The issue POST fails with 422 when the label does not exist yet;
+          # create it first (tolerate an already-exists 422 from a race).
+          if ! call "$api/labels/ci-alert" >/dev/null; then
+            call -X POST "$api/labels" -d '{"name":"ci-alert","color":"B60205","description":"Automated weekly CI failure alert"}' >/dev/null || true
+          fi
+          num=$(call "$api/issues?state=open&labels=ci-alert&per_page=1" | jq -r '.[0].number // empty')
+          if [ -z "$num" ]; then
+            call -X POST "$api/issues" -d "$(jq -n --arg b "The weekly full CI run failed: $run" '{title:"Weekly full CI run failed",body:$b,labels:["ci-alert"]}')" >/dev/null
+          else
+            # Latest comment is on the LAST page; compute it from the issue's
+            # comment count so a long-lived issue cannot reset the 24h throttle.
+            meta=$(call "$api/issues/$num")
+            count=$(jq -r .comments <<<"$meta")
+            if [ "$count" -gt 0 ]; then
+              page=$(( (count + 99) / 100 ))
+              last=$(call "$api/issues/$num/comments?per_page=100&page=$page" | jq -r '.[-1].created_at')
+            else
+              last=$(jq -r .created_at <<<"$meta")
+            fi
+            age=$(( $(date -u +%s) - $(date -u -d "$last" +%s) ))
+            if [ "$age" -ge 86400 ]; then
+              call -X POST "$api/issues/$num/comments" -d "$(jq -n --arg b "Still failing: $run" '{body:$b}')" >/dev/null
+            fi
+          fi
