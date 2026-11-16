@@ -499,7 +499,7 @@ def bounded_summary(text, metrics_path):
             lines.append(line)
             used += size
     except (TypeError, AttributeError):
-        lines.append("Per-test details unavailable.")
+        lines.extend(["", "Per-test details unavailable."])
     return "\n".join(lines) + "\n"
 
 

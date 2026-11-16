@@ -192,7 +192,7 @@ class Synthetic(unittest.TestCase):
                 if content is not None:
                     metrics.write_text(content)
                 result = c.bounded_summary(text, metrics)
-                self.assertIn("Per-test details unavailable.", result)
+                self.assertIn("\n\nPer-test details unavailable.", result)
                 self.assertIn("93.41%", result)
                 self.assertLessEqual(len(result.encode()), c.SUMMARY_BYTE_LIMIT)
 
