@@ -13,12 +13,12 @@
     },
     "requirements/ci.txt": {
       "command": "uv pip compile --universal --generate-hashes --python-version 3.11 requirements/ci.in -c requirements/api.txt -o requirements/ci.txt",
-      "inputs_sha256": "07f415d4fd5c7736d3a39873c493f0633c902fa0fe091718426ce14f7adc29cd",
-      "lock_sha256": "d35f8a387e242ba708dd32d31398b7fb69da7f2aa2422df4eb66dc919ffc0c67"
+      "inputs_sha256": "e742415bfdce8e6c7e5ca30ece3ea26be2d119f77041164b2ff502e2d3fe35a7",
+      "lock_sha256": "8b9a94fb9628e8cacc136cab6880e017058165a3719e932ed4dda18fe35a566d"
     },
     "requirements/dev.txt": {
       "command": "uv pip compile --universal --generate-hashes --python-version 3.11 requirements/dev.in -c requirements/api.txt -c requirements/ci.txt -o requirements/dev.txt",
-      "inputs_sha256": "aad0570d8674a5362c34992ae1254fab95a531fdbaca5376012a18c5951e08ff",
+      "inputs_sha256": "1c9027466881c1a86d51d12bf24a66877f5fc1609689956294cf8fc6bfbd43e5",
       "lock_sha256": "d198b813f4a1f11219a549723a556c529c010634ff733ed895c875a1fcee7c32"
     }
   },
