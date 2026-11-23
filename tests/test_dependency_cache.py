@@ -6,6 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@unittest.skipUnless(
+    (ROOT / ".github/workflows/tests.yml").is_file(),
+    "source-only workflows are excluded from the Docker test image",
+)
 class DependencyCacheTests(unittest.TestCase):
     def test_all_test_caches_cover_installed_locks(self):
         text = (ROOT / ".github/workflows/tests.yml").read_text()
