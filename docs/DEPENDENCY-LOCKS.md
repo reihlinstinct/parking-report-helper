@@ -90,3 +90,14 @@ count. The guard still scans the workflows and prints these lines as pending.
 It fails on any new violating line, and on an entry that no longer matches
 exactly. Entries outside `.github/workflows/` are refused. The workflow change
 deletes the file.
+
+## CI dependency download cache
+
+Test jobs use `requirements/*.txt` to identify the download cache of the pinned
+setup-python action,
+not the release version in `pyproject.toml`. The API workflow names its checked-out
+helper build/API locks explicitly. Compatible OS, architecture and Python pip
+download reuse remains available through setup-python. Cache hits do not skip
+installation or hash verification; cold misses may still need the package index.
+Only package-manager downloads are cached, never reports, credentials, photos,
+private checkouts, installed environments or test results.
