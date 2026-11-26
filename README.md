@@ -15,6 +15,9 @@ Hebrew report text, checks vehicles against the government registry, files cases
 through the municipality's 106 API and keeps duplicate and audit state. Report
 text is Hebrew; code and documentation are English.
 
+Beit Shemesh backend code is also included but **disabled**, without UI changes
+or an active municipality route. See [docs/BEIT-SHEMESH.md](docs/BEIT-SHEMESH.md).
+
 This repository is the **engine**. It holds code, a captured municipal subject
 catalog and synthetic tests only. Real photos, plates, reporter identity,
 registry snapshots and credentials live in a separate private data repository
